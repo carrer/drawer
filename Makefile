@@ -3,6 +3,13 @@ SHELL := /bin/bash
 COMPOSE := docker compose --env-file infra/.env -f infra/docker-compose.yml
 LAN_IP := $(shell ip route get 1.1.1.1 2>/dev/null | awk '{print $$7; exit}')
 
+# Native Android builds. React Native's Gradle toolchain wants JDK 17 — a newer
+# system default (e.g. 25) breaks it — and Gradle won't guess the SDK location.
+# Either can be overridden from the environment.
+ANDROID_HOME ?= $(HOME)/Android/Sdk
+JAVA_HOME ?= $(firstword $(wildcard /usr/lib/jvm/java-17-openjdk-* /usr/lib/jvm/temurin-17-*))
+ANDROID_ENV := ANDROID_HOME=$(ANDROID_HOME) JAVA_HOME=$(JAVA_HOME) PATH=$(JAVA_HOME)/bin:$(ANDROID_HOME)/platform-tools:$$PATH
+
 .PHONY: help install up down logs ps reset db migrate enroll-code devices revoke api mobile prebuild android typecheck test test-integration check lan-ip
 
 help: ## Show this help
@@ -55,8 +62,10 @@ mobile: ## Start Metro for the dev build (reachable from the phone over LAN)
 prebuild: ## Generate native projects (required after changing app.json plugins)
 	npm run prebuild --workspace @drawer/mobile
 
-android: ## Build + install the dev client on a connected device
-	npm run android --workspace @drawer/mobile
+android: ## Build + install the dev client on a connected device (USB debugging on)
+	@[ -d "$(ANDROID_HOME)" ] || { echo "Android SDK not found at $(ANDROID_HOME) — set ANDROID_HOME" >&2; exit 1; }
+	@[ -x "$(JAVA_HOME)/bin/java" ] || { echo "JDK 17 not found — install openjdk-17-jdk or set JAVA_HOME" >&2; exit 1; }
+	$(ANDROID_ENV) npm run android --workspace @drawer/mobile
 
 typecheck: ## Typecheck every workspace
 	npm run typecheck

@@ -1,18 +1,11 @@
-// Monorepo-aware Metro config: watch the whole workspace so edits in
-// packages/shared hot-reload, and resolve from both node_modules roots.
+// Expo's default config is monorepo-aware since SDK 52: it watches the workspace
+// root (so edits in packages/shared hot-reload) and resolves from both
+// node_modules roots on its own.
+//
+// Don't add `resolver.disableHierarchicalLookup = true` back. npm legitimately
+// nests packages (e.g. node_modules/expo/node_modules/expo-modules-core), and
+// with hierarchical lookup off Metro can't see them. The app then dies on
+// launch with "Unable to resolve module expo-modules-core".
 const { getDefaultConfig } = require('expo/metro-config');
-const path = require('node:path');
 
-const projectRoot = __dirname;
-const workspaceRoot = path.resolve(projectRoot, '../..');
-
-const config = getDefaultConfig(projectRoot);
-
-config.watchFolders = [workspaceRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
-  path.resolve(workspaceRoot, 'node_modules'),
-];
-config.resolver.disableHierarchicalLookup = true;
-
-module.exports = config;
+module.exports = getDefaultConfig(__dirname);

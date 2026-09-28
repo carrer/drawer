@@ -72,6 +72,14 @@ npx eas build --profile development -p android
 make mobile                  # Metro for the dev build, from repo root
 ```
 
+**Run Expo commands from `apps/mobile/` (or via `make`), never from the repo root.** At the root,
+Expo treats the whole monorepo as the app: it adds `expo`/`react`/`react-native` to the root
+`package.json`, writes a root `app.json` with a placeholder `com.anonymous.*` package, generates root
+`android/`+`ios/`, and reinstalls packages out of sync with the lockfile. `make android` pins JDK 17
+and `ANDROID_HOME` (RN's Gradle breaks on newer JDKs; Gradle won't find the SDK unaided). Metro uses
+Expo's default monorepo-aware config — don't re-add `disableHierarchicalLookup`, it hides packages
+npm nests and the app crashes on launch with "Unable to resolve module".
+
 Expo Go cannot run this app — share-target support needs native manifest entries (intent
 filters), so a development build is required from the start.
 
