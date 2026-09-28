@@ -1,0 +1,24 @@
+# Production reverse proxy (Phase 1). Caddy handles TLS automatically.
+#
+# Two hostnames: the API, and the S3 endpoint the phone uploads to directly.
+# S3_PUBLIC_ENDPOINT must equal the storage hostname below, or presigned URLs
+# will be signed for the wrong origin and every upload will 403.
+
+api.drawer.example.com {
+	encode zstd gzip
+	request_body {
+		max_size 2MB          # metadata only — bytes never pass through the API
+	}
+	reverse_proxy api:8080
+}
+
+storage.drawer.example.com {
+	encode zstd gzip
+	request_body {
+		max_size 2GB
+	}
+	# Caddy forwards the original Host by default — keep it that way. Garage
+	# validates presigned signatures against the Host it receives, which must be
+	# this hostname (= S3_PUBLIC_ENDPOINT), not the upstream's.
+	reverse_proxy garage:3900
+}

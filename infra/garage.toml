@@ -1,0 +1,25 @@
+# Garage — single-node S3 store for Drawer. See PLAN.md §11 for why not MinIO.
+#
+# The RPC secret is NOT here: Garage reads it from GARAGE_RPC_SECRET (set via
+# infra/.env), so this file can be committed as-is.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+
+# One node, one copy. Durability comes from the restic backup (PLAN.md Phase 5),
+# not from replication.
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+# Must equal S3_REGION in services/api/.env — Garage rejects signatures whose
+# credential scope names a different region.
+s3_region = "us-east-1"
+api_bind_addr = "[::]:3900"
+# No root_domain: path-style addressing only (storage.ts sets forcePathStyle).
+
+[admin]
+api_bind_addr = "[::]:3903"

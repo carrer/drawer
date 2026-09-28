@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Drawer",
+    "slug": "drawer",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "drawer",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.carrer.drawer",
+      "edgeToEdgeEnabled": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.carrer.drawer",
+      "supportsTablet": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": ["text/*", "image/*", "video/*", "application/pdf", "*/*"],
+          "androidMultiIntentFilters": ["image/*", "video/*", "*/*"],
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1,
+            "NSExtensionActivationSupportsImageWithMaxCount": 10,
+            "NSExtensionActivationSupportsMovieWithMaxCount": 5,
+            "NSExtensionActivationSupportsFileWithMaxCount": 10
+          },
+          "iosShareExtensionName": "Drawer Share"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

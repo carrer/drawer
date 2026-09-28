@@ -1,0 +1,62 @@
+# Drawer — local development dependencies.
+#
+# Phase 0 only brings up the two stateful services. The API and worker run on the
+# host with `make api` so you get fast reloads; they move into this file (behind
+# Caddy) when you deploy to the VPS in Phase 1.
+#
+# Ports bind to 0.0.0.0 on purpose: a physical Android device on your LAN has to
+# reach Garage directly for presigned uploads. On the VPS, drop these `ports:`
+# blocks entirely and let Caddy be the only thing listening.
+
+name: drawer
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-drawer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-drawer}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Applied once, on first boot of an empty volume.
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-drawer} -d ${POSTGRES_DB:-drawer}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  garage:
+    image: dxflrs/garage:v2.4.1
+    restart: unless-stopped
+    environment:
+      # Cluster-internal RPC secret (32 random bytes, hex). Overrides garage.toml.
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?set GARAGE_RPC_SECRET in infra/.env}
+    # Unlike MinIO there is no "server URL" to configure: Garage checks presigned
+    # signatures against the Host header it actually receives. The trap moves to
+    # the API side — S3_PUBLIC_ENDPOINT must be the address the DEVICE dials.
+    ports:
+      - "${S3_PORT:-9000}:3900"
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    # The image is just the binary — no shell — so exec form only.
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Bucket + key setup lives in scripts/garage-init.sh (run by `make up`): the
+  # garage image has no shell, and the CLI must talk to the running node over
+  # RPC, so it runs via `docker compose exec` rather than as a one-shot service.
+
+volumes:
+  pgdata:
+  garage-meta:
+  garage-data:

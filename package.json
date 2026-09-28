@@ -1,0 +1,22 @@
+{
+  "name": "drawer",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Personal capture archive — share anything from your phone into a gallery you own.",
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

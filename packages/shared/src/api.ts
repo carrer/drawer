@@ -1,0 +1,59 @@
+import { z } from 'zod';
+import { CategorySchema, ItemSchema, Sha256Hex, Uuid } from './schema.ts';
+
+/**
+ * Delta sync. `since` and `cursor` are values of a Postgres sequence, never
+ * timestamps — two rows written in the same millisecond would straddle a
+ * wall-clock cursor and one would be silently skipped forever.
+ */
+export const SyncQuerySchema = z.object({
+  since: z.coerce.number().int().nonnegative().default(0),
+  limit: z.coerce.number().int().min(1).max(1000).default(500),
+});
+export type SyncQuery = z.infer<typeof SyncQuerySchema>;
+
+export const SyncResponseSchema = z.object({
+  items: z.array(ItemSchema),
+  categories: z.array(CategorySchema),
+  cursor: z.number().int().nonnegative(),
+  more: z.boolean(),
+});
+export type SyncResponse = z.infer<typeof SyncResponseSchema>;
+
+/**
+ * Ask for somewhere to put bytes. When the server already holds this sha256 it
+ * answers `exists` and the client skips the upload entirely — re-sharing a meme
+ * you already saved costs zero bytes.
+ */
+export const PresignRequestSchema = z.object({
+  sha256: Sha256Hex,
+  byteSize: z.number().int().positive().max(2 * 1024 * 1024 * 1024),
+  mimeType: z.string().min(1).max(255),
+});
+export type PresignRequest = z.infer<typeof PresignRequestSchema>;
+
+export const PresignResponseSchema = z.discriminatedUnion('exists', [
+  z.object({ exists: z.literal(true), blobId: Uuid }),
+  z.object({
+    exists: z.literal(false),
+    blobId: Uuid,
+    uploadUrl: z.string().url(),
+    expiresAt: z.string().datetime({ offset: true }),
+  }),
+]);
+export type PresignResponse = z.infer<typeof PresignResponseSchema>;
+
+export const EnrollRequestSchema = z.object({
+  code: z.string().min(8).max(128),
+  deviceName: z.string().min(1).max(128),
+});
+export const EnrollResponseSchema = z.object({
+  deviceId: Uuid,
+  token: z.string().min(32),
+  ownerId: Uuid,
+});
+
+export const ErrorResponseSchema = z.object({
+  error: z.string(),
+  message: z.string(),
+});
