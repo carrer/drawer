@@ -82,7 +82,7 @@ export default function Home() {
     >
       <View style={s.header}>
         <View>
-          <Text style={s.title}>Drawer</Text>
+          <Text style={s.title}>Drowa</Text>
           <Text style={s.subtitle}>
             {isReady ? 'share target armed' : 'starting…'} · {items.length} captured
           </Text>
@@ -103,7 +103,7 @@ export default function Home() {
           <Text style={s.emptyGlyph}>🗄️</Text>
           <Text style={s.emptyTitle}>Nothing captured yet</Text>
           <Text style={s.emptyBody}>
-            Open any app, hit Share, and pick <Text style={s.strong}>Drawer</Text>. A screenshot, a
+            Open any app, hit Share, and pick <Text style={s.strong}>Drowa</Text>. A screenshot, a
             link, a PDF — whatever arrives shows up here with its hash and where the bytes landed.
           </Text>
         </View>
