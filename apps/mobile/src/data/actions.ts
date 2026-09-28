@@ -12,7 +12,7 @@ const openDetail = (id: string) => router.push({ pathname: '/item/[id]', params:
 /**
  * The big button in the action sheet: the one thing you most likely came back
  * for. Links open where they live, files open in their app, images and notes
- * open in Drowa itself.
+ * open in drowa itself.
  */
 export function primaryAction(item: LocalItem): PrimaryAction {
   if (item.kind === 'link' && item.url) {

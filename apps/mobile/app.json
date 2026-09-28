@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Drowa",
+    "name": "drowa",
     "slug": "drowa",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -36,7 +36,7 @@
             "NSExtensionActivationSupportsMovieWithMaxCount": 5,
             "NSExtensionActivationSupportsFileWithMaxCount": 10
           },
-          "iosShareExtensionName": "Drowa Share"
+          "iosShareExtensionName": "drowa Share"
         }
       ]
     ],
