@@ -3,7 +3,7 @@ SHELL := /bin/bash
 COMPOSE := docker compose --env-file infra/.env -f infra/docker-compose.yml
 LAN_IP := $(shell ip route get 1.1.1.1 2>/dev/null | awk '{print $$7; exit}')
 
-.PHONY: help install up down logs ps reset db api mobile prebuild android typecheck test check lan-ip
+.PHONY: help install up down logs ps reset db migrate enroll-code devices revoke api mobile prebuild android typecheck test check lan-ip
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -11,9 +11,10 @@ help: ## Show this help
 install: ## npm install across the workspace
 	npm install
 
-up: infra/.env ## Start postgres + garage (S3)
+up: infra/.env ## Start postgres + garage (S3), apply migrations
 	$(COMPOSE) up -d --wait postgres garage
 	@./scripts/garage-init.sh
+	@$(MAKE) --no-print-directory migrate
 
 down: ## Stop services (volumes kept)
 	$(COMPOSE) down
@@ -31,6 +32,18 @@ reset: ## DESTROY all local data and re-apply migrations from scratch
 
 db: ## psql shell
 	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-drawer} -d $${POSTGRES_DB:-drawer}
+
+migrate: ## Apply pending migrations (infra/db/migrations)
+	@npm run --silent cli --workspace @drawer/api -- migrate
+
+enroll-code: ## Mint a one-shot code to enroll a device (TTL=minutes, default 15)
+	@npm run --silent cli --workspace @drawer/api -- enroll-code --ttl $(or $(TTL),15)
+
+devices: ## List enrolled devices
+	@npm run --silent cli --workspace @drawer/api -- devices
+
+revoke: ## Revoke a device token: make revoke ID=<device-id>
+	@npm run --silent cli --workspace @drawer/api -- revoke $(ID)
 
 api: ## Run the API with reload
 	npm run dev --workspace @drawer/api

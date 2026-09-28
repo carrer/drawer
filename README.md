@@ -15,7 +15,7 @@ your Expo account. Phase 1 is the backend.
 cp infra/.env.example infra/.env            # then set S3_PUBLIC_ENDPOINT — see below
 cp services/api/.env.example services/api/.env
 make install
-make up                                      # postgres + garage (S3), schema applied on first boot
+make up                                      # postgres + garage (S3), then applies migrations
 make api                                     # http://localhost:8080/health
 make check                                   # the Phase 0 gate: 11 real round-trips
 ```
@@ -58,6 +58,9 @@ Run `make help` for the full list. The ones you'll use:
 | `make up` / `make down` | start / stop Postgres + Garage |
 | `make reset` | destroy local data and re-apply migrations (asks first) |
 | `make db` | psql shell |
+| `make migrate` | apply pending migrations |
+| `make enroll-code` | mint a one-shot code to enroll a phone (`TTL=` minutes) |
+| `make devices` / `make revoke ID=…` | list / revoke enrolled devices |
 | `make check` | verify the whole local stack end to end |
 | `make test` | unit tests, no database needed |
 | `make typecheck` | typecheck every workspace |
@@ -70,5 +73,5 @@ Run `make help` for the full list. The ones you'll use:
 - **Ports are off the defaults** (Postgres 5433, Garage S3 9010) because 5432 and 9000
   collide with almost everything. Nothing hardcodes a port.
 - **The guard rails are in the database, not the client.** Read-only-ness, uniqueness and the
-  revision counter are enforced by constraints and triggers in `infra/db/migrations/001_init.sql`
+  revision counter are enforced by constraints and triggers in `infra/db/migrations/`
   so a buggy client cannot corrupt the archive.

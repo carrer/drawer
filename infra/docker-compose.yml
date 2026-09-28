@@ -20,10 +20,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-drawer}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
+    # Schema is NOT applied via docker-entrypoint-initdb.d: `make up` runs
+    # node-pg-migrate, which tracks what's applied. Both at once would replay
+    # every migration after 001 onto a fresh volume.
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # Applied once, on first boot of an empty volume.
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-drawer} -d ${POSTGRES_DB:-drawer}"]
       interval: 5s

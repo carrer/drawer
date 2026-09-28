@@ -315,12 +315,13 @@ else starts until this is true.
 > Phase 3.
 
 ### Phase 1 — Backend core (~2–3 days)
-- [ ] Migrations for §3 (`dbmate` or `node-pg-migrate`).
-- [ ] Fastify + zod validation + pino; `/v1/auth/enroll` and device-token middleware.
+- [x] Migrations for §3 (`node-pg-migrate`, plain SQL in `infra/db/migrations/`; `make migrate`).
+- [x] Fastify + zod validation + pino; `/v1/auth/enroll` and device-token middleware.
+      Codes and tokens are stored as SHA-256 only; `make enroll-code` / `devices` / `revoke`.
 - [ ] Blob presign/commit against Garage; content-addressed keys.
 - [ ] Items + categories CRUD, upsert semantics, soft delete.
 - [ ] `/v1/sync` with the `rev` cursor.
-- [ ] Caddy in front, real TLS on your domain.
+- [ ] Caddy in front, TLS via Tailscale's certificates for the MagicDNS name (§10).
 - [ ] Integration tests against throwaway Postgres + Garage containers.
 
 ### Phase 2 — Mobile local-first core (~3–4 days)
@@ -399,9 +400,15 @@ encryption at the VPS level is the proportionate answer).
 
 ## 10. Open items to confirm before Phase 1
 
-- Domain name / VPS for the box (and whether it's behind Tailscale instead of public TLS —
-  Tailscale-only would simplify auth and remove the SSRF blast radius, at the cost of needing
-  the VPN on to save anything).
+- ~~Domain name vs. Tailscale~~ — **decided 2026-09-28: Tailscale-only.** No public ports; the
+  phone reaches the box over the tailnet by its MagicDNS name (`drawer.<tailnet>.ts.net`), and
+  Caddy gets TLS certificates for that name from the local tailscaled. This shrinks the auth and
+  SSRF blast radius to your own devices; the cost is that uploads wait until the phone is on the
+  tailnet, which local-first capture already tolerates. A single node has one MagicDNS name, so the
+  API and Garage split by port (e.g. API on 443, storage on 8443) rather than by hostname, and
+  `S3_PUBLIC_ENDPOINT` is that storage origin. Device-token auth stays mandatory regardless.
+  A public domain can be added later without app changes — it is only a different base URL.
+- VPS vs. a machine at home.
 - Storage budget — drives the cache eviction threshold and the backup target.
 - The object store — see §11.
 
