@@ -13,8 +13,8 @@ See **PLAN.md** for the full architecture and phase-by-phase roadmap — it's th
 for design decisions and known traps, not just a proposal.
 
 Status: **Phase 0 complete** (scaffold + de-risk) apart from the on-device build, which needs an
-Expo account. **Phase 1 (backend core) in progress:** migrations, device enrollment and token auth
-are done; blobs, items/categories, sync and search are next. `services/worker/` in the target
+Expo account. **Phase 1 (backend core) in progress:** migrations, enrollment/auth, blobs, items,
+categories, sync and search are done and integration-tested; Caddy + Tailscale TLS is what's left. `services/worker/` in the target
 architecture does not exist yet.
 
 **Deployment is Tailscale-only (decided 2026-09-28):** no public ports; the phone reaches the box over
@@ -31,6 +31,7 @@ make api                                     # run the API with reload — http:
 make check                                   # Phase 0 gate: 11 real round-trip checks, see below
 make typecheck                               # tsc --noEmit across every workspace
 make test                                    # unit tests, no database needed
+make test-integration                        # API against the running stack (make up first)
 make db                                      # psql shell
 make migrate                                 # apply pending migrations (make up does this too)
 make enroll-code [TTL=15]                    # mint a one-shot code to enroll a phone
@@ -134,6 +135,10 @@ it actually dialled — signing with the internal name is the #1 self-hosted S3 
   dropped forever; a sequence can't do that. `GET /v1/sync?since=<rev>` is the delta-pull endpoint.
 - `item_categories` (the item↔category many-to-many) is not synced as its own table — an item's
   category set travels inside the item and bumps the item's `rev`.
+- `rev` order must equal commit order or the cursor skips rows: `003_rev_commit_order.sql` makes the
+  trigger take an advisory lock (`DRAWER_REV_LOCK`) before drawing a rev, and API writes use
+  `withWriteTx` (`services/api/src/db.ts`), which takes it *first* so it can't deadlock with row
+  locks. `test/integration/sync.test.ts` proves it.
 - Deletes are soft (`deleted_at`) so they propagate through sync; a nightly job is planned to
   hard-delete rows >30 days soft-deleted and GC blobs with no remaining referents (must be
   reference-counted, not age-based — dedupe means one blob can back many items).

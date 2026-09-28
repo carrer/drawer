@@ -3,7 +3,7 @@ SHELL := /bin/bash
 COMPOSE := docker compose --env-file infra/.env -f infra/docker-compose.yml
 LAN_IP := $(shell ip route get 1.1.1.1 2>/dev/null | awk '{print $$7; exit}')
 
-.PHONY: help install up down logs ps reset db migrate enroll-code devices revoke api mobile prebuild android typecheck test check lan-ip
+.PHONY: help install up down logs ps reset db migrate enroll-code devices revoke api mobile prebuild android typecheck test test-integration check lan-ip
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -63,6 +63,9 @@ typecheck: ## Typecheck every workspace
 
 test: ## Run unit tests
 	npm test
+
+test-integration: ## API integration tests against the running stack (make up first)
+	npm run test:integration --workspace @drawer/api
 
 check: ## Phase 0 gate — verify the whole local stack end to end
 	@./scripts/phase0-check.sh

@@ -4,6 +4,10 @@ import type pg from 'pg';
 import { requireDevice } from './auth.ts';
 import { errorHandler } from './errors.ts';
 import { enrollRoutes, whoamiRoutes } from './routes/auth.ts';
+import { blobRoutes } from './routes/blobs.ts';
+import { categoryRoutes } from './routes/categories.ts';
+import { itemRoutes } from './routes/items.ts';
+import { syncRoutes } from './routes/sync.ts';
 import type { Storage } from './storage.ts';
 
 export interface AppDeps {
@@ -66,7 +70,10 @@ export function buildApp({ pool, s3, logger = true }: AppDeps) {
       v1.register(async (authed) => {
         authed.addHook('onRequest', requireDevice(pool));
         whoamiRoutes(authed);
-        // Next: blobs/presign + commit, items, categories, sync, search.
+        blobRoutes(authed, pool, s3);
+        itemRoutes(authed, pool, s3);
+        categoryRoutes(authed, pool);
+        syncRoutes(authed, pool);
       });
     },
     { prefix: '/v1' },

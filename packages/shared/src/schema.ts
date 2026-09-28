@@ -5,6 +5,12 @@ export const Uuid = z.string().uuid();
 export const Sha256Hex = z.string().regex(/^[0-9a-f]{64}$/, 'expected lowercase hex sha256');
 export const Iso = z.string().datetime({ offset: true });
 
+/**
+ * Seeded by 001_init.sql and undeletable: the capture sheet's one-tap "Save to
+ * Inbox" targets it without a lookup. It can be renamed.
+ */
+export const INBOX_CATEGORY_ID = '00000000-0000-0000-0000-0000000000a1';
+
 export const ItemKindSchema = z.enum(ITEM_KINDS);
 
 export const BlobSchema = z.object({
@@ -81,6 +87,23 @@ export const ItemUpsertSchema = z.object({
 });
 export type ItemUpsert = z.infer<typeof ItemUpsertSchema>;
 
+/**
+ * Edits after capture. Kind, blob, url and capturedAt are what was shared, so
+ * they're fixed; to change those, capture again. Omitted fields are untouched,
+ * `null` clears. `categoryIds` replaces the whole set.
+ */
+export const ItemPatchSchema = z
+  .object({
+    title: z.string().max(512).nullable(),
+    note: z.string().max(8192).nullable(),
+    body: z.string().max(1_000_000),
+    categoryIds: z.array(Uuid).max(64),
+    tags: z.array(z.string().max(64)).max(64),
+  })
+  .partial()
+  .strict();
+export type ItemPatch = z.infer<typeof ItemPatchSchema>;
+
 export const CategoryUpsertSchema = z.object({
   id: Uuid,
   name: z.string().min(1).max(64),
@@ -89,3 +112,14 @@ export const CategoryUpsertSchema = z.object({
   sortOrder: z.number().int().default(0),
 });
 export type CategoryUpsert = z.infer<typeof CategoryUpsertSchema>;
+
+export const CategoryPatchSchema = z
+  .object({
+    name: z.string().min(1).max(64),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable(),
+    icon: z.string().max(8).nullable(),
+    sortOrder: z.number().int(),
+  })
+  .partial()
+  .strict();
+export type CategoryPatch = z.infer<typeof CategoryPatchSchema>;

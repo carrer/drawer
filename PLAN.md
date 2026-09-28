@@ -239,11 +239,19 @@ the membership can never arrive before the row it points at.
 
 `rev` comes from a single Postgres sequence bumped on every write (trigger), **not wall-clock
 time**. Wall clocks give you the classic boundary bug where two rows written in the same
-millisecond straddle the cursor and one is silently dropped forever. A monotonic sequence
-cannot.
+millisecond straddle the cursor and one is silently dropped forever.
+
+A sequence alone has the same bug in a different shape: sequence values are drawn at write time
+but become visible at *commit* time, so a slow transaction can commit rev 10 after a sync already
+advanced past 11. `003_rev_commit_order.sql` closes it — every writer takes one advisory lock
+before drawing a rev and holds it to commit, so rev order is commit order and every snapshot is a
+gap-free prefix. `/v1/sync` reads each page from one `REPEATABLE READ` snapshot.
 
 Push is per-item and idempotent: the client generates the `id`, so `POST /v1/items` with an
-existing id is an upsert. A retry after a timeout is always safe.
+existing id is an upsert. A retry after a timeout is always safe, and a retry that changes nothing
+doesn't advance `rev`. What was shared (kind, blob, url, capturedAt) is immutable; the editable
+fields are last-write-wins by arrival. A deleted item stays deleted — a stale create retry
+returns the tombstone instead of resurrecting it.
 
 Deletes are soft (`deleted_at`) so they propagate. A nightly job hard-deletes rows soft-deleted
 >30 days ago and garbage-collects blobs with no remaining referents.
@@ -318,11 +326,12 @@ else starts until this is true.
 - [x] Migrations for §3 (`node-pg-migrate`, plain SQL in `infra/db/migrations/`; `make migrate`).
 - [x] Fastify + zod validation + pino; `/v1/auth/enroll` and device-token middleware.
       Codes and tokens are stored as SHA-256 only; `make enroll-code` / `devices` / `revoke`.
-- [ ] Blob presign/commit against Garage; content-addressed keys.
-- [ ] Items + categories CRUD, upsert semantics, soft delete.
-- [ ] `/v1/sync` with the `rev` cursor.
+- [x] Blob presign/commit against Garage; content-addressed keys, length + SHA-256 signed into the PUT.
+- [x] Items + categories CRUD, upsert semantics, soft delete. (Plus `GET /v1/search`.)
+- [x] `/v1/sync` with the `rev` cursor, rev order = commit order (003).
 - [ ] Caddy in front, TLS via Tailscale's certificates for the MagicDNS name (§10).
-- [ ] Integration tests against throwaway Postgres + Garage containers.
+- [x] Integration tests (`make test-integration`): a throwaway database per file on the running
+      stack, real presigned round-trips through Garage. Not yet in CI — needs the stack up there.
 
 ### Phase 2 — Mobile local-first core (~3–4 days)
 - [ ] `expo-sqlite` schema + migrations; typed repository layer.
@@ -389,6 +398,15 @@ iOS share extension · a read-only web gallery reusing the same API · AI auto-t
    archive. An untested restore is not a backup — do one restore drill in Phase 5.
 9. **Blob GC must be reference-counted**, not "delete blobs older than X". Dedupe means one blob
    can back many items.
+10. **A sequence cursor still skips rows if revs commit out of order** — see §5 and
+    `003_rev_commit_order.sql`. Anything that writes items/categories outside the API goes through
+    the trigger's lock; don't add a write path that sets `rev` itself.
+11. **The presigned PUT pins length and SHA-256.** `presignPut` signs `Content-Length` and
+    `x-amz-checksum-sha256` (hoisted into the query string), and Garage rejects any other bytes —
+    this is what makes a content-addressed key trustworthy. The client must upload with a real
+    `Content-Length` (no chunked encoding) and no extra headers. When the worker writes
+    `thumb_key` etc. onto a blob, it must also bump every item referencing it, or devices never
+    re-pull the new metadata.
 
 ## 9. Explicitly out of scope for v1
 

@@ -63,6 +63,7 @@ Run `make help` for the full list. The ones you'll use:
 | `make devices` / `make revoke ID=…` | list / revoke enrolled devices |
 | `make check` | verify the whole local stack end to end |
 | `make test` | unit tests, no database needed |
+| `make test-integration` | API integration tests against the running stack |
 | `make typecheck` | typecheck every workspace |
 | `make lan-ip` | print the IP for `S3_PUBLIC_ENDPOINT` |
 

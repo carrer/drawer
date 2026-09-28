@@ -13,6 +13,11 @@ export class HttpError extends Error {
   }
 }
 
+/** Postgres unique_violation, e.g. a second live category with the same name. */
+export function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: string } | null)?.code === '23505';
+}
+
 export function errorHandler(err: FastifyError | Error, req: FastifyRequest, reply: FastifyReply) {
   if (err instanceof ZodError) {
     const message = err.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');

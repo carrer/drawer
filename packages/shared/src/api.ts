@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CategorySchema, ItemSchema, Sha256Hex, Uuid } from './schema.ts';
+import { BlobSchema, CategorySchema, ItemSchema, Sha256Hex, Uuid } from './schema.ts';
 
 /**
  * Delta sync. `since` and `cursor` are values of a Postgres sequence, never
@@ -42,6 +42,31 @@ export const PresignResponseSchema = z.discriminatedUnion('exists', [
   }),
 ]);
 export type PresignResponse = z.infer<typeof PresignResponseSchema>;
+
+/**
+ * After the PUT succeeds, the client commits. The server checks the object is
+ * really in storage with the declared size before marking the blob uploaded;
+ * committing an already-committed blob just returns it again.
+ */
+export const CommitResponseSchema = BlobSchema;
+export type CommitResponse = z.infer<typeof CommitResponseSchema>;
+
+/** Short-lived GET for an item's original bytes. Ask again rather than caching it. */
+export const ItemUrlResponseSchema = z.object({
+  url: z.string().url(),
+  expiresAt: z.string().datetime({ offset: true }),
+});
+export type ItemUrlResponse = z.infer<typeof ItemUrlResponseSchema>;
+
+/** Every word in `q` is matched as a prefix, all must match; results are best-first. */
+export const SearchQuerySchema = z.object({
+  q: z.string().trim().min(1).max(256),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type SearchQuery = z.infer<typeof SearchQuerySchema>;
+
+export const SearchResponseSchema = z.object({ items: z.array(ItemSchema) });
+export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 
 export const EnrollRequestSchema = z.object({
   code: z.string().min(8).max(128),
