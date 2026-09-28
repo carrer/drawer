@@ -1,249 +1,281 @@
-import { Image } from 'expo-image';
-import { useShareIntentContext } from 'expo-share-intent';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { router } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatBytes, ingestShareIntent, type CapturedArtifact } from '@/capture';
-import { clearAll, loadCaptures, saveCaptures } from '@/store';
-import { kindGlyph, useTheme, type Palette } from '@/theme';
+import { useCategories, useItems, useWrite } from '@/data/store';
+import { useShareCapture } from '@/data/useShareCapture';
+import type { LocalItem } from '@/db/repo';
+import { seedSampleData } from '@/db/seed';
+import { categoryHue, font, useTheme, type Theme } from '@/theme';
+import { ActionSheet } from '@/ui/ActionSheet';
+import { Chip } from '@/ui/Chip';
+import { DrawersView } from '@/ui/DrawersView';
+import { Icon, Logo } from '@/ui/icons';
+import { IconButton } from '@/ui/IconButton';
+import { ItemRow } from '@/ui/ItemRow';
+import { withSections, type FeedRow } from '@/ui/sections';
 
 /**
- * Phase 0 capture harness.
- *
- * Not the gallery — this screen exists to prove the gate: share from a real app,
- * see the bytes land on disk, survive a restart. Phase 2 replaces it with the
- * actual grid.
+ * Home: everything saved, newest first, grouped by when you saved it — or, one
+ * tap away, the same things as category drawers. Reads only local SQLite, so it
+ * renders the same with the server unreachable.
  */
 export default function Home() {
-  const theme = useTheme();
+  const t = useTheme();
+  const s = styles(t);
   const insets = useSafeAreaInsets();
-  const { isReady, hasShareIntent, shareIntent, resetShareIntent, error } = useShareIntentContext();
+  const write = useWrite();
+  const { notice, dismiss } = useShareCapture();
 
-  const [items, setItems] = useState<CapturedArtifact[]>(() => loadCaptures());
-  const [lastRaw, setLastRaw] = useState<string | null>(null);
-  const [showRaw, setShowRaw] = useState(false);
-  const [ingestError, setIngestError] = useState<string | null>(null);
-  const ingesting = useRef(false);
+  const [view, setView] = useState<'list' | 'drawers'>('list');
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [order, setOrder] = useState<'newest' | 'oldest'>('newest');
+  const [sheetItem, setSheetItem] = useState<string | null>(null);
+  const search = useRef<TextInput>(null);
+
+  const categories = useCategories();
+  const { items, total, loadMore } = useItems({ categoryId, query, order });
+  const rows = useMemo(() => withSections(items), [items]);
+
+  // A filtered-on category can vanish (deleted on the categories screen).
+  useEffect(() => {
+    if (categoryId && !categories.some((c) => c.id === categoryId)) setCategoryId(null);
+  }, [categories, categoryId]);
 
   useEffect(() => {
-    if (!hasShareIntent || ingesting.current) return;
-    ingesting.current = true;
-    setIngestError(null);
-    setLastRaw(JSON.stringify(shareIntent, null, 2));
+    if (notice?.tone !== 'ok') return;
+    const timer = setTimeout(dismiss, 3500);
+    return () => clearTimeout(timer);
+  }, [notice, dismiss]);
 
-    ingestShareIntent(shareIntent)
-      .then((captured) => {
-        if (captured.length === 0) {
-          setIngestError('share intent contained nothing we could store');
-          return;
-        }
-        setItems((prev) => {
-          const next = [...captured, ...prev];
-          saveCaptures(next);
-          return next;
-        });
-      })
-      .catch((err: unknown) => setIngestError(String(err)))
-      .finally(() => {
-        ingesting.current = false;
-        resetShareIntent();
-      });
-  }, [hasShareIntent, shareIntent, resetShareIntent]);
+  const openItem = useCallback(
+    (item: LocalItem) => router.push({ pathname: '/item/[id]', params: { id: item.id } }),
+    [],
+  );
+  const openActions = useCallback((item: LocalItem) => setSheetItem(item.id), []);
+  const closeSheet = useCallback(() => setSheetItem(null), []);
 
-  const onClear = useCallback(() => {
-    Alert.alert('Clear everything?', 'Deletes the captured list and the stored blobs.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: () => {
-          clearAll(items);
-          setItems([]);
-          setLastRaw(null);
-        },
-      },
-    ]);
-  }, [items]);
-
-  const s = styles(theme);
-  const status = error ?? ingestError;
+  const filtered = categoryId !== null || query.trim() !== '';
 
   return (
-    <ScrollView
-      style={[s.screen, { paddingTop: insets.top }]}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
-    >
+    <View style={[s.screen, { paddingTop: insets.top + 14 }]}>
       <View style={s.header}>
-        <View>
-          <Text style={s.title}>Drowa</Text>
-          <Text style={s.subtitle}>
-            {isReady ? 'share target armed' : 'starting…'} · {items.length} captured
-          </Text>
+        <View style={s.brandRow}>
+          <Logo color={t.text} />
+          <View style={s.buttons}>
+            {view === 'list' ? (
+              <>
+                <IconButton name="drawers" label="Switch to drawers view" onPress={() => setView('drawers')} />
+                <IconButton
+                  name="sort"
+                  label={order === 'newest' ? 'Showing newest first; show oldest first' : 'Showing oldest first; show newest first'}
+                  active={order === 'oldest'}
+                  onPress={() => setOrder(order === 'newest' ? 'oldest' : 'newest')}
+                />
+              </>
+            ) : (
+              <IconButton
+                name="search"
+                label="Search"
+                onPress={() => {
+                  setView('list');
+                  setTimeout(() => search.current?.focus(), 50);
+                }}
+              />
+            )}
+          </View>
         </View>
-        <View style={s.badge}>
-          <Text style={s.badgeText}>PHASE 0</Text>
-        </View>
+
+        {view === 'list' ? (
+          <>
+            <View style={s.search}>
+              <Icon name="search" color={t.placeholder} />
+              <TextInput
+                ref={search}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search everything you saved"
+                placeholderTextColor={t.placeholder}
+                returnKeyType="search"
+                autoCorrect={false}
+                accessibilityLabel="Search your drawer"
+                style={s.searchInput}
+              />
+              {query ? (
+                <Pressable onPress={() => setQuery('')} hitSlop={10} accessibilityLabel="Clear search">
+                  <Icon name="close" color={t.placeholder} size={18} />
+                </Pressable>
+              ) : null}
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={s.chipScroll}
+              contentContainerStyle={s.chips}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Chip label="All" selected={categoryId === null} onPress={() => setCategoryId(null)} />
+              {categories.map((c, index) => (
+                <Chip
+                  key={c.id}
+                  label={c.name}
+                  bar={categoryHue(t, c.color, index).bar}
+                  selected={categoryId === c.id}
+                  onPress={() => setCategoryId(categoryId === c.id ? null : c.id)}
+                  onLongPress={() => router.push('/categories')}
+                />
+              ))}
+              <Chip label="Edit" dashed onPress={() => router.push('/categories')} accessibilityLabel="Manage categories" />
+            </ScrollView>
+          </>
+        ) : null}
       </View>
 
-      {status ? (
-        <View style={[s.card, s.errorCard]}>
-          <Text style={s.errorText}>{status}</Text>
-        </View>
-      ) : null}
-
-      {items.length === 0 ? (
-        <View style={s.empty}>
-          <Text style={s.emptyGlyph}>🗄️</Text>
-          <Text style={s.emptyTitle}>Nothing captured yet</Text>
-          <Text style={s.emptyBody}>
-            Open any app, hit Share, and pick <Text style={s.strong}>Drowa</Text>. A screenshot, a
-            link, a PDF — whatever arrives shows up here with its hash and where the bytes landed.
+      {notice ? (
+        <Pressable
+          onPress={dismiss}
+          style={[s.notice, notice.tone === 'error' ? s.noticeError : s.noticeOk]}
+          accessibilityRole="alert"
+        >
+          <Text style={[s.noticeText, { color: notice.tone === 'error' ? t.danger : t.hues.green.ink }]}>
+            {notice.text}
           </Text>
-        </View>
-      ) : (
-        items.map((item) => <Row key={item.id} item={item} theme={theme} />)
-      )}
-
-      {lastRaw ? (
-        <View style={s.rawBlock}>
-          <Pressable onPress={() => setShowRaw((v) => !v)} hitSlop={8}>
-            <Text style={s.rawToggle}>{showRaw ? '▾' : '▸'} last raw ShareIntent</Text>
-          </Pressable>
-          {showRaw ? <Text style={s.rawText}>{lastRaw}</Text> : null}
-        </View>
-      ) : null}
-
-      {items.length > 0 ? (
-        <Pressable onPress={onClear} style={s.clear} hitSlop={8}>
-          <Text style={s.clearText}>Clear all</Text>
         </Pressable>
       ) : null}
-    </ScrollView>
-  );
-}
 
-function Row({ item, theme }: { item: CapturedArtifact; theme: Palette }) {
-  const s = styles(theme);
-  const preview = item.kind === 'image' && item.localUri;
+      {view === 'drawers' ? (
+        <DrawersView
+          categories={categories}
+          onOpenItem={openItem}
+          onActions={openActions}
+          onSeeAll={(id) => {
+            setCategoryId(id);
+            setView('list');
+          }}
+          onManage={() => router.push('/categories')}
+          bottomInset={insets.bottom}
+        />
+      ) : total === 0 ? (
+        <Empty
+          s={s}
+          filtered={filtered}
+          onClear={() => {
+            setCategoryId(null);
+            setQuery('');
+          }}
+          onSeed={__DEV__ && !filtered ? () => write(seedSampleData) : undefined}
+        />
+      ) : (
+        <FlashList<FeedRow<LocalItem>>
+          data={rows}
+          keyExtractor={(row) => row.key}
+          getItemType={(row) => row.type}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          renderItem={({ item: row, index }) =>
+            row.type === 'header' ? (
+              <Text style={[s.section, index > 0 && s.sectionLater]}>{row.label}</Text>
+            ) : (
+              <View style={s.rowGap}>
+                <ItemRow item={row.item} onPress={openItem} onActions={openActions} />
+              </View>
+            )
+          }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.8}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: insets.bottom + 24 }}
+        />
+      )}
 
-  return (
-    <View style={s.card}>
-      <View style={s.thumb}>
-        {preview ? (
-          <Image source={{ uri: item.localUri! }} style={s.thumbImage} contentFit="cover" transition={120} />
-        ) : (
-          <Text style={s.thumbGlyph}>{kindGlyph[item.kind] ?? '📦'}</Text>
-        )}
-      </View>
-
-      <View style={s.rowBody}>
-        <View style={s.rowTop}>
-          <Text style={s.kind}>{item.kind}</Text>
-          {item.duplicate ? <Text style={s.dupe}>already had it</Text> : null}
-        </View>
-
-        <Text style={s.rowTitle} numberOfLines={2}>
-          {item.title ?? item.url ?? item.body ?? '(untitled)'}
-        </Text>
-
-        {item.note ? (
-          <Text style={s.note} numberOfLines={2}>
-            {item.note}
-          </Text>
-        ) : null}
-
-        <Text style={s.meta}>
-          {item.sha256
-            ? `${item.sha256.slice(0, 12)}… · ${formatBytes(item.byteSize)} · ${item.mimeType}`
-            : new Date(item.capturedAt).toLocaleString()}
-        </Text>
-      </View>
+      <ActionSheet itemId={sheetItem} onClose={closeSheet} />
     </View>
   );
 }
 
-const styles = (t: Palette) =>
+function Empty({
+  s,
+  filtered,
+  onClear,
+  onSeed,
+}: {
+  s: Styles;
+  filtered: boolean;
+  onClear: () => void;
+  onSeed?: () => void;
+}) {
+  if (filtered) {
+    return (
+      <View style={s.empty}>
+        <Text style={s.emptyTitle}>Nothing matches</Text>
+        <Pressable onPress={onClear} hitSlop={8} accessibilityRole="button">
+          <Text style={s.emptyLink}>Clear search and filters</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  return (
+    <View style={s.empty}>
+      <Text style={s.emptyTitle}>Your drawer is empty</Text>
+      <Text style={s.emptyBody}>
+        Open any app, tap Share, and pick drowa. Links, places, screenshots, PDFs and notes all land here.
+      </Text>
+      {onSeed ? (
+        <Pressable onPress={onSeed} hitSlop={8} accessibilityRole="button">
+          <Text style={s.emptyLink}>Load sample data (dev)</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+type Styles = ReturnType<typeof styles>;
+const styles = (t: Theme) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: t.bg },
-    header: {
+    header: { paddingHorizontal: 20, paddingBottom: 12, gap: 16 },
+    brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    buttons: { flexDirection: 'row', gap: 8 },
+
+    search: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 12,
-    },
-    title: { fontSize: 30, fontWeight: '700', color: t.text, letterSpacing: -0.5 },
-    subtitle: { fontSize: 13, color: t.muted, marginTop: 2 },
-    badge: {
-      backgroundColor: t.accentSoft,
-      borderRadius: 6,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-    },
-    badgeText: { fontSize: 10, fontWeight: '700', color: t.accent, letterSpacing: 1 },
-
-    card: {
-      flexDirection: 'row',
-      gap: 12,
+      gap: 10,
+      height: 48,
+      paddingHorizontal: 16,
       backgroundColor: t.surface,
       borderColor: t.border,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: 14,
-      padding: 12,
-      marginHorizontal: 16,
-      marginBottom: 10,
+      borderWidth: 1,
+      borderRadius: 16,
     },
-    errorCard: { borderColor: t.warn, backgroundColor: t.accentSoft },
-    errorText: { color: t.warn, fontSize: 13, flex: 1 },
+    searchInput: { flex: 1, fontFamily: font.body400, fontSize: 16, color: t.text, paddingVertical: 0 },
 
-    thumb: {
-      width: 60,
-      height: 60,
-      borderRadius: 10,
-      backgroundColor: t.bg,
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden',
-    },
-    thumbImage: { width: '100%', height: '100%' },
-    thumbGlyph: { fontSize: 26 },
+    // Bleeds off the right edge, like the design, so the row reads as scrollable.
+    chipScroll: { marginRight: -20 },
+    chips: { gap: 8, paddingRight: 20 },
 
-    rowBody: { flex: 1, gap: 3 },
-    rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    kind: { fontSize: 11, fontWeight: '700', color: t.accent, textTransform: 'uppercase', letterSpacing: 0.6 },
-    dupe: { fontSize: 11, color: t.good, fontWeight: '600' },
-    rowTitle: { fontSize: 15, color: t.text, fontWeight: '500' },
-    note: { fontSize: 13, color: t.muted, fontStyle: 'italic' },
-    meta: { fontSize: 11, color: t.muted, fontVariant: ['tabular-nums'] },
+    notice: { marginHorizontal: 20, marginBottom: 8, padding: 12, borderRadius: 14 },
+    noticeOk: { backgroundColor: t.hues.green.tint },
+    noticeError: { backgroundColor: t.dangerBg, borderWidth: 1, borderColor: t.dangerBorder },
+    noticeText: { fontFamily: font.body700, fontSize: 14 },
 
-    empty: { alignItems: 'center', paddingHorizontal: 40, paddingTop: 60, gap: 8 },
-    emptyGlyph: { fontSize: 48 },
-    emptyTitle: { fontSize: 18, fontWeight: '600', color: t.text },
-    emptyBody: { fontSize: 14, color: t.muted, textAlign: 'center', lineHeight: 21 },
-    strong: { color: t.accent, fontWeight: '700' },
-
-    rawBlock: { marginHorizontal: 16, marginTop: 14 },
-    rawToggle: { fontSize: 12, color: t.muted, fontWeight: '600' },
-    rawText: {
-      marginTop: 8,
-      padding: 12,
-      backgroundColor: t.surface,
-      borderRadius: 10,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: t.border,
+    section: {
+      fontFamily: font.heading800,
+      fontSize: 13,
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
       color: t.muted,
-      fontSize: 11,
-      fontFamily: 'monospace',
+      paddingTop: 6,
+      paddingHorizontal: 4,
+      paddingBottom: 10,
     },
+    sectionLater: { paddingTop: 10 },
+    rowGap: { paddingBottom: 10 },
 
-    clear: { alignSelf: 'center', marginTop: 20, padding: 10 },
-    clearText: { color: t.warn, fontSize: 14, fontWeight: '600' },
+    empty: { alignItems: 'center', paddingHorizontal: 36, paddingTop: 64, gap: 10 },
+    emptyTitle: { fontFamily: font.heading800, fontSize: 20, color: t.text },
+    emptyBody: { fontFamily: font.body400, fontSize: 15, color: t.muted, textAlign: 'center', lineHeight: 22 },
+    emptyLink: { fontFamily: font.heading800, fontSize: 15, color: t.hues.blue.ink, marginTop: 6 },
   });

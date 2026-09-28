@@ -159,16 +159,3 @@ export async function ingestShareIntent(intent: ShareIntent): Promise<CapturedAr
 
   return out;
 }
-
-export function formatBytes(n: number | null): string {
-  if (n === null) return '—';
-  if (n < 1024) return `${n} B`;
-  const units = ['KB', 'MB', 'GB'];
-  let value = n / 1024;
-  let i = 0;
-  while (value >= 1024 && i < units.length - 1) {
-    value /= 1024;
-    i += 1;
-  }
-  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
-}

@@ -16,7 +16,8 @@ Status: **Phase 0 complete** (scaffold + de-risk) apart from the on-device build
 Expo account. **Phase 1 (backend core) in progress:** migrations, enrollment/auth, blobs, items,
 categories, sync and search are done and integration-tested; the production stack (Caddy +
 Tailscale TLS, `infra/docker-compose.prod.yml`) is written but not yet run against a real tailnet. `services/worker/` in the target
-architecture does not exist yet.
+architecture does not exist yet. **Phase 2 (mobile local-first core) is built** — SQLite, gallery,
+categories, detail views — and bundles, but has not had an on-device pass yet.
 
 **Deployment is Tailscale-only (decided 2026-09-28):** no public ports; the phone reaches the box over
 the tailnet via its MagicDNS name. Don't design for public-internet exposure (see PLAN.md §10).
@@ -113,6 +114,13 @@ it actually dialled — signing with the internal name is the #1 self-hosted S3 
   is the capture pipeline: on share, copy bytes out of the transient `content://` URI immediately
   (the grant dies with the activity), hash with SHA-256 in a single streaming pass alongside a
   magic-byte MIME sniff, then write into local SQLite before syncing.
+  Local data lives in `src/db/` (SQLite schema, migrations, typed repository). Everything there
+  talks to a tiny `SqlDb` interface (`src/db/sql.ts`); only `src/db/expo.ts` imports `expo-sqlite`,
+  and `src/db/testing.ts` backs it with `node:sqlite` so `npm test` covers the repository with no
+  device. Keep Expo imports out of `src/db/` and use relative `.ts` imports there (Node can't
+  resolve the `@/` alias). UI writes go through `useWrite()` (`src/data/store.tsx`), which bumps a
+  change counter that every live query hook re-reads on — a write that bypasses it leaves stale
+  screens.
 - **`services/api/`** — Fastify. Issues presigned URLs and manages metadata; never streams file
   bytes itself. `src/config.ts` fails loudly at boot naming every missing env var (zod-validated),
   matching the "fail at startup, not first request" pattern.
@@ -169,6 +177,9 @@ it actually dialled — signing with the internal name is the #1 self-hosted S3 
   upload against them with `InvalidDigest` (MinIO silently ignored it).
 - `android:launchMode="singleTask"` means warm launches arrive via `onNewIntent`, not a fresh
   activity — test cold launch, warm launch, and share-while-foregrounded as separate cases.
+- `expo-sharing` (used only to share *out*) ships a "share into" feature that, when its config
+  plugin enables it (`android.enabled`), rewrites incoming `SEND` intents to `VIEW` on cold start —
+  which would break `expo-share-intent` capture. It's deliberately not in `app.json` plugins; keep it out.
 - The shared `content://` URI grant is transient — copy bytes inside the handler, never stash the
   URI for later.
 - Never load a shared video fully into memory; stream the hash/sniff pass and stream the upload.

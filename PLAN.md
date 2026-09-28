@@ -336,11 +336,20 @@ else starts until this is true.
 - [x] Integration tests (`make test-integration`): a throwaway database per file on the running
       stack, real presigned round-trips through Garage. Not yet in CI — needs the stack up there.
 
-### Phase 2 — Mobile local-first core (~3–4 days)
-- [ ] `expo-sqlite` schema + migrations; typed repository layer.
-- [ ] Gallery: `@shopify/flash-list` masonry grid, `expo-image` with disk caching.
-- [ ] Category management; filter bar; item detail view per kind (image viewer, link card, PDF, text).
-- [ ] Runs entirely offline against seeded local data. No server involved.
+### Phase 2 — Mobile local-first core (~3–4 days) — built, awaiting an on-device pass
+- [x] `expo-sqlite` schema + migrations (`src/db/migrations.ts`, `PRAGMA user_version`); typed
+      repository (`src/db/repo.ts`) behind a small `SqlDb` interface, so `npm test` exercises it
+      on `node:sqlite` with no device. Phase 0's `captures.json` is imported once, into Inbox.
+- [x] Home, to the "drowa app screens" design (2026-09-28), which replaced the planned masonry
+      grid: a FlashList feed grouped by date (Today / This week / …) with local search (plain
+      `LIKE` until Phase 4's FTS5), sort, colour-barred category chips, a "categories as drawers"
+      view, and a ⋯/long-press action sheet (open · share · delete · tags). Nunito + Nunito Sans,
+      `react-native-svg` icons. The design is light-only; the dark palette is extrapolated.
+- [x] Category management (add, rename, icon, color, reorder, delete); category + kind filter
+      bar; item detail per kind — image viewer, link card, editable text, and PDF/video/audio
+      handed to the system viewer via `expo-intent-launcher` (new native module: rebuild the dev
+      client). No in-app PDF renderer in v1.
+- [x] Runs entirely offline; "Load sample data" (dev builds only) seeds every kind.
 
 ### Phase 3 — Capture + sync (~3–4 days)
 - [ ] Full capture pipeline from §4, including streamed hashing and kind sniffing.
