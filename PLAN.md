@@ -329,7 +329,10 @@ else starts until this is true.
 - [x] Blob presign/commit against Garage; content-addressed keys, length + SHA-256 signed into the PUT.
 - [x] Items + categories CRUD, upsert semantics, soft delete. (Plus `GET /v1/search`.)
 - [x] `/v1/sync` with the `rev` cursor, rev order = commit order (003).
-- [ ] Caddy in front, TLS via Tailscale's certificates for the MagicDNS name (§10).
+- [x] Caddy in front, TLS via Tailscale's certificates for the MagicDNS name (§10).
+      `infra/docker-compose.prod.yml` (`make up PROD=1`): a tailscale sidecar registers the node
+      as `drawer`, Caddy shares its network namespace (API on :443, Garage on :8443), and no
+      host ports are bound. Untested against a live tailnet until the box exists.
 - [x] Integration tests (`make test-integration`): a throwaway database per file on the running
       stack, real presigned round-trips through Garage. Not yet in CI — needs the stack up there.
 

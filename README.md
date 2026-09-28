@@ -38,6 +38,23 @@ make mobile                                  # Metro for the dev build
 Expo Go cannot run this — share targets need native manifest entries, so a development build
 is required from the start.
 
+## Deploying (Tailscale-only)
+
+The production stack never binds a host port: a tailscale sidecar joins your tailnet as
+`drawer`, and Caddy, running in its network namespace, serves the API on
+`https://drawer.<tailnet>.ts.net` and storage on `:8443`, using certificates fetched from
+tailscaled.
+
+1. In the Tailscale admin console, enable **MagicDNS** and **HTTPS Certificates**, and
+   create an auth key.
+2. In `infra/.env`, set `DRAWER_HOST=drawer.<tailnet>.ts.net` and `TS_AUTHKEY=…`. Use a
+   URL-safe `POSTGRES_PASSWORD`, because it gets embedded in a connection URL.
+3. `make up PROD=1`, then `make enroll-code PROD=1`. `PROD=1` works on every operator
+   target.
+
+`TS_AUTHKEY` is only read on the first boot. After that, the node identity lives in the
+`ts-state` volume.
+
 ## Layout
 
 ```

@@ -1,24 +1,29 @@
-# Production reverse proxy (Phase 1). Caddy handles TLS automatically.
+# Production reverse proxy — runs inside the tailscale sidecar's network
+# namespace (docker-compose.prod.yml), so it is reachable only over the tailnet.
 #
-# Two hostnames: the API, and the S3 endpoint the phone uploads to directly.
-# S3_PUBLIC_ENDPOINT must equal the storage hostname below, or presigned URLs
-# will be signed for the wrong origin and every upload will 403.
+# TLS: for a *.ts.net site address Caddy skips ACME and fetches the certificate
+# from the local tailscaled (socket mounted at /var/run/tailscale). This needs
+# MagicDNS and "HTTPS Certificates" enabled in the tailnet's admin console.
+#
+# A node has exactly one MagicDNS name, so the API and storage split by port.
+# The storage origin is S3_PUBLIC_ENDPOINT (compose derives it from DRAWER_HOST).
 
-api.drawer.example.com {
+{$DRAWER_HOST} {
 	encode zstd gzip
 	request_body {
-		max_size 2MB          # metadata only — bytes never pass through the API
+		max_size 2MB # metadata only — bytes never pass through the API
 	}
 	reverse_proxy api:8080
 }
 
-storage.drawer.example.com {
-	encode zstd gzip
+{$DRAWER_HOST}:8443 {
+	# No `encode`: blobs are mostly already compressed, and re-encoding a GET
+	# would break Content-Length and Range requests for video seeking.
 	request_body {
 		max_size 2GB
 	}
-	# Caddy forwards the original Host by default — keep it that way. Garage
-	# validates presigned signatures against the Host it receives, which must be
-	# this hostname (= S3_PUBLIC_ENDPOINT), not the upstream's.
+	# Caddy forwards the original Host (with its :8443) by default — keep it that
+	# way. Garage validates presigned signatures against the Host it receives,
+	# which must match the origin the URL was signed for.
 	reverse_proxy garage:3900
 }

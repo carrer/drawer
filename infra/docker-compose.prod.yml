@@ -1,0 +1,95 @@
+# Drawer — production overlay, layered on docker-compose.yml:
+#   docker compose --env-file infra/.env -f infra/docker-compose.yml -f infra/docker-compose.prod.yml …
+# (or just `make up PROD=1`).
+#
+# Tailscale-only (PLAN.md §10): nothing binds a host port. A tailscale sidecar
+# joins the tailnet as its own node named "drawer", so the MagicDNS name is
+# drawer.<tailnet>.ts.net no matter what the host is called. Caddy shares the
+# sidecar's network namespace — it listens on the tailnet address directly and
+# gets certificates for the MagicDNS name from that tailscaled over its socket.
+#
+#   https://DRAWER_HOST        → api:8080     (metadata only)
+#   https://DRAWER_HOST:8443   → garage:3900  (presigned PUT/GET, = S3_PUBLIC_ENDPOINT)
+
+services:
+  postgres:
+    ports: !reset []
+
+  garage:
+    ports: !reset []
+
+  api:
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      garage: { condition: service_healthy }
+    environment:
+      PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # URL-embedded: keep POSTGRES_PASSWORD to URL-safe characters (openssl rand -hex).
+      DATABASE_URL: postgres://${POSTGRES_USER:-drawer}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-drawer}
+      S3_ENDPOINT: http://garage:3900
+      # Derived, not configured, so it cannot drift from the Caddy site below —
+      # presigned URLs must be signed for exactly the origin the phone dials.
+      S3_PUBLIC_ENDPOINT: https://${DRAWER_HOST:?set DRAWER_HOST in infra/.env}:8443
+      S3_BUCKET: ${S3_BUCKET:-drawer}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_REGION: ${S3_REGION:-us-east-1}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  tailscale:
+    image: tailscale/tailscale:v1.88
+    hostname: drawer
+    restart: unless-stopped
+    environment:
+      # Only needed for the first login; the node identity then lives in ts-state.
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_AUTH_ONCE: "true"
+      TS_HOSTNAME: drawer
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SOCKET: /var/run/tailscale/tailscaled.sock
+      # Kernel networking, so inbound tailnet connections reach Caddy's
+      # listeners in this namespace like any other interface.
+      TS_USERSPACE: "false"
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ts-state:/var/lib/tailscale
+      - ts-socket:/var/run/tailscale
+    healthcheck:
+      test: ["CMD", "tailscale", "--socket=/var/run/tailscale/tailscaled.sock", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    network_mode: service:tailscale
+    depends_on:
+      tailscale: { condition: service_healthy }
+      api: { condition: service_healthy }
+    environment:
+      DRAWER_HOST: ${DRAWER_HOST:?set DRAWER_HOST in infra/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddy finds tailscaled at this default path and asks it for *.ts.net certs.
+      - ts-socket:/var/run/tailscale
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  ts-state:
+  ts-socket:
+  caddy-data:
+  caddy-config:

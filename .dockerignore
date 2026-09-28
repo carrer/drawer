@@ -1,0 +1,9 @@
+# Build context is the repo root (the API image needs packages/shared and the
+# migrations). Keep it small: nothing host-built, no secrets.
+**/node_modules
+**/.env
+**/.env.*
+.git
+apps/mobile/*
+!apps/mobile/package.json
+infra/.data

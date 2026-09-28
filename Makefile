@@ -1,6 +1,17 @@
 # Drawer — see PLAN.md for what each phase delivers.
 SHELL := /bin/bash
+# PROD=1 layers docker-compose.prod.yml on top: API + Caddy + a tailscale sidecar,
+# no host ports. Operator commands then run inside the api container, since the
+# database is no longer reachable from the host.
+ifdef PROD
+COMPOSE := docker compose --env-file infra/.env -f infra/docker-compose.yml -f infra/docker-compose.prod.yml
+CLI := $(COMPOSE) exec -T api node src/cli.ts
+MIGRATE := $(COMPOSE) run --rm --build --no-deps api node src/cli.ts migrate
+else
 COMPOSE := docker compose --env-file infra/.env -f infra/docker-compose.yml
+CLI := npm run --silent cli --workspace @drawer/api --
+MIGRATE := $(CLI) migrate
+endif
 LAN_IP := $(shell ip route get 1.1.1.1 2>/dev/null | awk '{print $$7; exit}')
 
 # Native Android builds. React Native's Gradle toolchain wants JDK 17 — a newer
@@ -18,10 +29,13 @@ help: ## Show this help
 install: ## npm install across the workspace
 	npm install
 
-up: infra/.env ## Start postgres + garage (S3), apply migrations
+up: infra/.env ## Start postgres + garage (S3), apply migrations (PROD=1: the whole stack)
 	$(COMPOSE) up -d --wait postgres garage
 	@./scripts/garage-init.sh
 	@$(MAKE) --no-print-directory migrate
+ifdef PROD
+	$(COMPOSE) up -d --build --wait
+endif
 
 down: ## Stop services (volumes kept)
 	$(COMPOSE) down
@@ -41,16 +55,16 @@ db: ## psql shell
 	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-drawer} -d $${POSTGRES_DB:-drawer}
 
 migrate: ## Apply pending migrations (infra/db/migrations)
-	@npm run --silent cli --workspace @drawer/api -- migrate
+	@$(MIGRATE)
 
 enroll-code: ## Mint a one-shot code to enroll a device (TTL=minutes, default 15)
-	@npm run --silent cli --workspace @drawer/api -- enroll-code --ttl $(or $(TTL),15)
+	@$(CLI) enroll-code --ttl $(or $(TTL),15)
 
 devices: ## List enrolled devices
-	@npm run --silent cli --workspace @drawer/api -- devices
+	@$(CLI) devices
 
 revoke: ## Revoke a device token: make revoke ID=<device-id>
-	@npm run --silent cli --workspace @drawer/api -- revoke $(ID)
+	@$(CLI) revoke $(ID)
 
 api: ## Run the API with reload
 	npm run dev --workspace @drawer/api

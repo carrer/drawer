@@ -14,7 +14,8 @@ for design decisions and known traps, not just a proposal.
 
 Status: **Phase 0 complete** (scaffold + de-risk) apart from the on-device build, which needs an
 Expo account. **Phase 1 (backend core) in progress:** migrations, enrollment/auth, blobs, items,
-categories, sync and search are done and integration-tested; Caddy + Tailscale TLS is what's left. `services/worker/` in the target
+categories, sync and search are done and integration-tested; the production stack (Caddy +
+Tailscale TLS, `infra/docker-compose.prod.yml`) is written but not yet run against a real tailnet. `services/worker/` in the target
 architecture does not exist yet.
 
 **Deployment is Tailscale-only (decided 2026-09-28):** no public ports; the phone reaches the box over
@@ -38,6 +39,8 @@ make enroll-code [TTL=15]                    # mint a one-shot code to enroll a 
 make devices / make revoke ID=<uuid>         # list / revoke enrolled devices
 make down / make reset                       # stop services / DESTROY local data + re-apply migrations (asks first)
 make lan-ip                                  # print the LAN IP to put in S3_PUBLIC_ENDPOINT
+make up PROD=1                               # production: + API image, Caddy, tailscale sidecar; no host ports
+make enroll-code PROD=1                      # PROD=1 on any operator target runs it inside the api container
 ```
 
 **Node 24 is required** (`.nvmrc`; use `nvm use`). The API and tests run `.ts` files directly via
@@ -123,7 +126,11 @@ it actually dialled — signing with the internal name is the #1 self-hosted S3 
     Android routinely lies), and text/link classification for shared plain text.
   - `schema.ts` / `api.ts` — row schemas and the sync/presign/enroll API contracts.
 - **`infra/`** — `docker-compose.yml` (Postgres 16 + Garage, non-default ports to avoid collisions —
-  see `infra/.env.example`), `Caddyfile`, and `db/migrations/NNN_*.sql`, applied in order by
+  see `infra/.env.example`); `docker-compose.prod.yml`, an overlay that `!reset`s those ports and adds
+  the API (`services/api/Dockerfile`, build context = repo root), a `tailscale` sidecar (node name
+  `drawer`) and Caddy running in the sidecar's network namespace, which gets `*.ts.net` certs from
+  tailscaled over the shared socket. In prod `S3_PUBLIC_ENDPOINT` is derived as
+  `https://$DRAWER_HOST:8443`, never configured separately. `Caddyfile`, and `db/migrations/NNN_*.sql`, applied in order by
   `node-pg-migrate` (`make migrate`, tracked in `pgmigrations`). **Never edit an applied migration —
   add the next numbered file.** Migrations are deliberately *not* mounted into the Postgres image's
   initdb hook: both would run and replay everything after 001.

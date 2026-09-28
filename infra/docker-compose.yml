@@ -1,12 +1,12 @@
 # Drawer — local development dependencies.
 #
-# Phase 0 only brings up the two stateful services. The API and worker run on the
-# host with `make api` so you get fast reloads; they move into this file (behind
-# Caddy) when you deploy to the VPS in Phase 1.
+# This file brings up only the two stateful services. In development the API runs on
+# the host with `make api` so you get fast reloads. In production,
+# docker-compose.prod.yml layers the API, Caddy and a tailscale sidecar on top
+# (`make up PROD=1`) and resets the host ports below.
 #
 # Ports bind to 0.0.0.0 on purpose: a physical Android device on your LAN has to
-# reach Garage directly for presigned uploads. On the VPS, drop these `ports:`
-# blocks entirely and let Caddy be the only thing listening.
+# reach Garage directly for presigned uploads.
 
 name: drawer
 
