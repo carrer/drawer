@@ -9,6 +9,12 @@ const ConfigSchema = z.object({
   S3_ACCESS_KEY: z.string().min(1),
   S3_SECRET_KEY: z.string().min(1),
   S3_REGION: z.string().default('us-east-1'),
+  // Origin that share links (QR codes) point at: the API as a *recipient* can
+  // reach it. Tailnet-only today; a public origin (e.g. Funnel) later.
+  SHARE_BASE_URL: z
+    .string()
+    .url()
+    .transform((u) => u.replace(/\/+$/, '')),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

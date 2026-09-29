@@ -58,6 +58,19 @@ export const ItemUrlResponseSchema = z.object({
 });
 export type ItemUrlResponse = z.infer<typeof ItemUrlResponseSchema>;
 
+/**
+ * A single-use link to one item's original, for showing as a QR code. Anyone
+ * holding `url` can download the file once, until `expiresAt`, with no device
+ * token. `ttlSeconds` lets the client count down on its own clock rather than
+ * trusting that it agrees with the server's.
+ */
+export const ShareResponseSchema = z.object({
+  url: z.string().url(),
+  expiresAt: z.string().datetime({ offset: true }),
+  ttlSeconds: z.number().int().positive(),
+});
+export type ShareResponse = z.infer<typeof ShareResponseSchema>;
+
 /** Every word in `q` is matched as a prefix, all must match; results are best-first. */
 export const SearchQuerySchema = z.object({
   q: z.string().trim().min(1).max(256),

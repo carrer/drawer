@@ -16,6 +16,7 @@ export type IconName =
   | 'dots'
   | 'external'
   | 'share'
+  | 'qr'
   | 'trash'
   | 'close'
   | 'plus';
@@ -122,6 +123,14 @@ const paths: Record<Exclude<IconName, 'dots'>, React.ReactNode> = {
       <Path d="M10 11v6M14 11v6" />
       <Path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" />
       <Path d="M9 7V4h6v3" />
+    </>
+  ),
+  qr: (
+    <>
+      <Rect x="4" y="4" width="6" height="6" rx="1" />
+      <Rect x="14" y="4" width="6" height="6" rx="1" />
+      <Rect x="4" y="14" width="6" height="6" rx="1" />
+      <Path d="M14 14h2v2M20 14v.01M14 20h.01M17 17v3h3" />
     </>
   ),
   close: <Path d="M6 6l12 12M18 6L6 18" />,

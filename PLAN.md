@@ -267,12 +267,24 @@ POST   /v1/items                upsert (client-generated id)
 PATCH  /v1/items/:id
 DELETE /v1/items/:id            soft delete
 GET    /v1/items/:id/url        short-TTL presigned GET for original
+POST   /v1/items/:id/share      30 s single-use share link, shown as a QR code
+GET    /s/:token                public: redeem once → 302 to a presigned GET (attachment)
 GET    /v1/search?q=            full-text over the tsvector
 CRUD   /v1/categories
 ```
 
 `presign` returning `exists: true` is the dedupe path: re-share the same meme and the save is
 instant and free.
+
+**Share as QR** (item action sheet → QR, decided 2026-09-29). Links and short notes (≤ 800
+UTF-8 bytes) are encoded straight into the code, offline. Files need their original synced: the
+phone mints a token (`share_tokens`, hash only, 30 s, single-use — `004_share_tokens.sql`), shows
+`<SHARE_BASE_URL>/s/<token>`, and mints the next one just before it lapses, for at most 5
+minutes per sheet. Redemption is one atomic `UPDATE … RETURNING`, so concurrent scans can't
+both win, and a HEAD never burns a token. Every failure (unknown, expired, used, item deleted)
+is the same 410 page. `/s/*` is the only unauthenticated route besides enroll and is written as
+if it were public; it's rate-limited globally, not per IP, because behind Caddy every caller
+has Caddy's address.
 
 ---
 
@@ -438,6 +450,13 @@ encryption at the VPS level is the proportionate answer).
   API and Garage split by port (e.g. API on 443, storage on 8443) rather than by hostname, and
   `S3_PUBLIC_ENDPOINT` is that storage origin. Device-token auth stays mandatory regardless.
   A public domain can be added later without app changes — it is only a different base URL.
+- **Share-as-QR recipients (2026-09-29): tailnet-only for now.** Whoever scans must be on the
+  tailnet (or have the node shared with them). To let anyone scan, expose *only* `/s/*` via
+  Tailscale Funnel. Caveat: `/s/<token>` redirects to a presigned GET on the storage origin
+  (:8443), so going public also means either funnelling :8443 (all of Garage's S3 API, still
+  signature-gated) or having Caddy follow the redirect internally (`handle_response` +
+  `X-Accel-Redirect`-style) so the recipient only ever talks to `/s/*`. The second is the smaller
+  hole; decide when Funnel is actually wanted.
 - VPS vs. a machine at home.
 - Storage budget — drives the cache eviction threshold and the backup target.
 - The object store — see §11.

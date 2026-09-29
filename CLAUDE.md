@@ -165,6 +165,12 @@ it actually dialled — signing with the internal name is the #1 self-hosted S3 
 - Deletes are soft (`deleted_at`) so they propagate through sync; a nightly job is planned to
   hard-delete rows >30 days soft-deleted and GC blobs with no remaining referents (must be
   reference-counted, not age-based — dedupe means one blob can back many items).
+- Share-as-QR (PLAN.md §5): `POST /v1/items/:id/share` mints a 30 s single-use token and
+  `GET /s/:token` (`services/api/src/routes/share.ts`, the one unauthenticated route besides enroll)
+  redeems it with a 302 to a presigned GET. Share links are built on `SHARE_BASE_URL`, which in
+  prod is derived from `DRAWER_HOST` like `S3_PUBLIC_ENDPOINT`. Keep `/s/*` written as if it faced the
+  public internet: every failure is the same 410, and `exposeHeadRoute: false` stops a link
+  checker's HEAD from burning the token.
 - `items.search` is a generated `tsvector` column (weighted: title/link_title > note >
   description/body > extracted_text) backing `GET /v1/search`.
 

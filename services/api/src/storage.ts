@@ -74,16 +74,26 @@ export async function presignPut(
   );
 }
 
-/** Short-lived GET for an original. The stored content type is whatever the client sent, so override it. */
+/**
+ * Short-lived GET for an original. The stored content type is whatever the
+ * client sent, so override it; `contentDisposition` (e.g. `attachment;
+ * filename=…`) is signed into the URL the same way.
+ */
 export async function presignGet(
   s3: Storage,
   key: string,
   mimeType: string,
   expiresIn: number,
+  contentDisposition?: string,
 ): Promise<string> {
   return getSignedUrl(
     s3.presigner,
-    new GetObjectCommand({ Bucket: s3.bucket, Key: key, ResponseContentType: mimeType }),
+    new GetObjectCommand({
+      Bucket: s3.bucket,
+      Key: key,
+      ResponseContentType: mimeType,
+      ResponseContentDisposition: contentDisposition,
+    }),
     { expiresIn },
   );
 }

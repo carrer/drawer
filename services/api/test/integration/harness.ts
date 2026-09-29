@@ -30,7 +30,7 @@ export async function setup() {
 
   const pool = new pg.Pool({ connectionString: url.toString(), max: 5 });
   const s3 = createS3(config);
-  const app = buildApp({ pool, s3, logger: false });
+  const app = buildApp({ pool, s3, shareBaseUrl: config.SHARE_BASE_URL, logger: false });
   const keys = new Set<string>();
 
   /** Enroll a device the way a phone does, returning a request helper bound to its token. */

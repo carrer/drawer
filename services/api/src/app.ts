@@ -7,17 +7,20 @@ import { enrollRoutes, whoamiRoutes } from './routes/auth.ts';
 import { blobRoutes } from './routes/blobs.ts';
 import { categoryRoutes } from './routes/categories.ts';
 import { itemRoutes } from './routes/items.ts';
+import { shareMintRoutes, shareRedeemRoutes } from './routes/share.ts';
 import { syncRoutes } from './routes/sync.ts';
 import type { Storage } from './storage.ts';
 
 export interface AppDeps {
   pool: pg.Pool;
   s3: Storage;
+  /** SHARE_BASE_URL: the origin QR share links point at. */
+  shareBaseUrl: string;
   logger?: FastifyServerOptions['logger'];
 }
 
 /** Build the app without listening, so tests can drive it through `app.inject()`. */
-export function buildApp({ pool, s3, logger = true }: AppDeps) {
+export function buildApp({ pool, s3, shareBaseUrl, logger = true }: AppDeps) {
   const app = Fastify({
     logger,
     bodyLimit: 2 * 1024 * 1024, // metadata only; bytes go straight to S3
@@ -61,6 +64,9 @@ export function buildApp({ pool, s3, logger = true }: AppDeps) {
     return reply.code(ok ? 200 : 503).send({ ok, checks });
   });
 
+  // The one route that works without a device token: redeeming a QR share code.
+  shareRedeemRoutes(app, pool, s3);
+
   app.register(
     async (v1) => {
       enrollRoutes(v1, pool);
@@ -72,6 +78,7 @@ export function buildApp({ pool, s3, logger = true }: AppDeps) {
         whoamiRoutes(authed);
         blobRoutes(authed, pool, s3);
         itemRoutes(authed, pool, s3);
+        shareMintRoutes(authed, pool, shareBaseUrl);
         categoryRoutes(authed, pool);
         syncRoutes(authed, pool);
       });

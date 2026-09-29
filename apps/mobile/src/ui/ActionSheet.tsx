@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { canShare, primaryAction, shareItem } from '../data/actions.ts';
+import { qrSource, type QrSource } from '../data/qrSource.ts';
 import { useCategories, useItem, useWrite } from '../data/store.tsx';
 import { deleteItem, getItem, updateItem } from '../db/repo.ts';
 import { categoryHue, font, useTheme } from '../theme.ts';
@@ -18,10 +19,12 @@ import { Pill } from './Chip.tsx';
 import { itemDescriptor, itemTitle, normalizeTag, savedAgo } from './format.ts';
 import { Icon } from './icons.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
+import { QrSheet } from './QrSheet.tsx';
 
 /**
  * Item actions (⋯ or long-press on a row): what it is, where it's filed, and
- * the three things you do with a saved thing — open it, share it, bin it.
+ * what you do with a saved thing — open it, share it (as a file or a QR code
+ * someone else scans), bin it.
  */
 export function ActionSheet({ itemId, onClose }: { itemId: string | null; onClose: () => void }) {
   return (
@@ -38,6 +41,7 @@ function Sheet({ itemId, onClose }: { itemId: string; onClose: () => void }) {
   const item = useItem(itemId);
   const categories = useCategories();
   const [tagDraft, setTagDraft] = useState<string | null>(null);
+  const [qr, setQr] = useState<Exclude<QrSource, { type: 'unavailable' }> | null>(null);
 
   // Deleted from elsewhere (or just now): nothing left to act on.
   useEffect(() => {
@@ -69,6 +73,12 @@ function Sheet({ itemId, onClose }: { itemId: string; onClose: () => void }) {
       const tags = getItem(db, item.id)?.tags ?? [];
       updateItem(db, item.id, { tags: tags.filter((x) => x !== tag) });
     });
+
+  const showQr = () => {
+    const source = qrSource(item);
+    if (source.type === 'unavailable') Alert.alert('Can’t share as QR', source.reason);
+    else setQr(source);
+  };
 
   const confirmDelete = () =>
     Alert.alert('Delete this item?', 'It disappears from every device once synced.', [
@@ -163,6 +173,19 @@ function Sheet({ itemId, onClose }: { itemId: string; onClose: () => void }) {
               <Text style={[s.secondaryText, { color: t.text }]}>Share</Text>
             </Pressable>
             <Pressable
+              onPress={showQr}
+              accessibilityRole="button"
+              accessibilityLabel="Share as QR code"
+              style={({ pressed }) => [
+                s.secondary,
+                { backgroundColor: t.surface, borderColor: t.border },
+                pressed && { opacity: 0.5 },
+              ]}
+            >
+              <Icon name="qr" color={t.text} strokeWidth={2.2} />
+              <Text style={[s.secondaryText, { color: t.text }]}>QR</Text>
+            </Pressable>
+            <Pressable
               onPress={confirmDelete}
               accessibilityRole="button"
               style={({ pressed }) => [
@@ -177,6 +200,7 @@ function Sheet({ itemId, onClose }: { itemId: string; onClose: () => void }) {
           </View>
         </View>
       </View>
+      <QrSheet item={item} source={qr} onClose={() => setQr(null)} />
     </KeyboardAvoidingView>
   );
 }

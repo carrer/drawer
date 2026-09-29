@@ -39,3 +39,17 @@ export function parseBearer(header: string | undefined): string | null {
   const m = /^Bearer\s+(\S+)\s*$/i.exec(header ?? '');
   return m?.[1] ?? null;
 }
+
+/**
+ * Share token for a QR code: 128 random bits, base64url (22 chars). It is
+ * single-use and lives 30 seconds, so 128 bits is overkill — and a short token
+ * keeps the QR code coarse enough to scan off a screen at arm's length.
+ */
+export function generateShareToken(): string {
+  return randomBytes(16).toString('base64url');
+}
+
+/** Cheap shape check, so garbage from the internet never reaches the database. */
+export function isShareToken(s: string): boolean {
+  return /^[A-Za-z0-9_-]{22}$/.test(s);
+}
