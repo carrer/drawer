@@ -65,6 +65,7 @@ export default function Home() {
         <View style={s.brandRow}>
           <Logo color={t.text} />
           <View style={s.buttons}>
+            <IconButton name="user" label="Account" onPress={() => router.push('/account')} />
             {view === 'list' ? (
               <>
                 <IconButton name="drawers" label="Switch to drawers view" onPress={() => setView('drawers')} />

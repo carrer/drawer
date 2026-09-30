@@ -96,6 +96,16 @@ export const EnrollResponseSchema = z.object({
  * Google's sign-in, and sends back the ID token Google signed it into; the
  * server answers exactly like enrollment, with a device token.
  */
+/**
+ * Public, fetched before sign-in: what this drawer supports. The Web client ID
+ * isn't a secret (it's in every ID token's `aud`), so the app learns it from the
+ * box it's connecting to rather than having it built in.
+ */
+export const AuthConfigResponseSchema = z.object({
+  googleWebClientId: z.string().nullable(),
+});
+export type AuthConfigResponse = z.infer<typeof AuthConfigResponseSchema>;
+
 export const NonceResponseSchema = z.object({
   nonce: z.string().min(16),
   expiresAt: z.string().datetime({ offset: true }),

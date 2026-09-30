@@ -17,6 +17,8 @@ import {
   setImageSize,
   updateCategory,
   updateItem,
+  countUnsynced,
+  wipeLocalData,
 } from './repo.ts';
 import { seedSampleData } from './seed.ts';
 import { memoryDb } from './testing.ts';
@@ -222,4 +224,18 @@ test('the dev seed covers every kind and is safe to run twice', () => {
   assert.equal(second, 0);
   const kinds = new Set(listItems(db, { limit: 1000 }).map((i) => i.kind));
   assert.deepEqual([...kinds].sort(), ['audio', 'document', 'image', 'link', 'text', 'video']);
+});
+
+test('wipeLocalData leaves exactly what a fresh install has', () => {
+  const db = memoryDb();
+  const fresh = listCategories(db);
+  seedSampleData(db);
+  createCategory(db, { name: 'Extra' });
+  assert.ok(countUnsynced(db) > 0);
+
+  wipeLocalData(db);
+  assert.deepEqual(listItems(db), []);
+  assert.deepEqual(listCategories(db), fresh);
+  assert.equal(countUnsynced(db), 0);
+  assert.equal(db.get<{ n: number }>('SELECT count(*) AS n FROM item_categories')?.n, 0);
 });

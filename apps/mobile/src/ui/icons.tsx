@@ -19,7 +19,8 @@ export type IconName =
   | 'qr'
   | 'trash'
   | 'close'
-  | 'plus';
+  | 'plus'
+  | 'user';
 
 type Props = { name: IconName; size?: number; color: string; strokeWidth?: number };
 
@@ -135,6 +136,12 @@ const paths: Record<Exclude<IconName, 'dots'>, React.ReactNode> = {
   ),
   close: <Path d="M6 6l12 12M18 6L6 18" />,
   plus: <Path d="M12 5v14M5 12h14" />,
+  user: (
+    <>
+      <Circle cx="12" cy="8" r="4" />
+      <Path d="M4 21a8 8 0 0 1 16 0" />
+    </>
+  ),
 };
 
 export const kindIcon: Record<ItemKind, IconName> = {

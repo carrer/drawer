@@ -67,3 +67,8 @@ test('Google sign-in answers 503, without touching the db, when GOOGLE_CLIENT_ID
   assert.equal(bad.statusCode, 503);
   assert.equal(bad.json().error, 'not_configured');
 });
+
+test('without GOOGLE_CLIENT_ID the app is told Google sign-in is off', async () => {
+  const res = await app.inject({ url: '/v1/auth/config' });
+  assert.deepEqual(res.json(), { googleWebClientId: null });
+});

@@ -19,11 +19,13 @@ export interface AppDeps {
   shareBaseUrl: string;
   /** Verifies Google ID tokens; null when GOOGLE_CLIENT_ID isn't configured. */
   google?: GoogleVerifier | null;
+  /** GOOGLE_CLIENT_ID, advertised to the app by /v1/auth/config. */
+  googleClientId?: string | null;
   logger?: FastifyServerOptions['logger'];
 }
 
 /** Build the app without listening, so tests can drive it through `app.inject()`. */
-export function buildApp({ pool, s3, shareBaseUrl, google = null, logger = true }: AppDeps) {
+export function buildApp({ pool, s3, shareBaseUrl, google = null, googleClientId = null, logger = true }: AppDeps) {
   const app = Fastify({
     logger,
     bodyLimit: 2 * 1024 * 1024, // metadata only; bytes go straight to S3
@@ -72,13 +74,13 @@ export function buildApp({ pool, s3, shareBaseUrl, google = null, logger = true 
 
   app.register(
     async (v1) => {
-      enrollRoutes(v1, pool, google);
+      enrollRoutes(v1, pool, google, googleClientId);
 
       // Everything else under /v1 needs a device token. Encapsulated, so the
       // hook can't leak onto the public routes above.
       v1.register(async (authed) => {
         authed.addHook('onRequest', requireDevice(pool));
-        whoamiRoutes(authed);
+        whoamiRoutes(authed, pool);
         blobRoutes(authed, pool, s3);
         itemRoutes(authed, pool, s3);
         shareMintRoutes(authed, pool, shareBaseUrl);

@@ -32,7 +32,13 @@ export type CapturedArtifact = {
 
 const blobsRoot = () => new Directory(Paths.document, 'blobs');
 
-/** blobs/<ab>/<cd>/<hex> — mirrors the server layout so keys are identical on both sides. */
+/** Delete every captured file on this device — signing out, after the database is wiped. */
+export function deleteLocalFiles(): void {
+  const root = blobsRoot();
+  if (root.exists) root.delete();
+}
+
+/** blobs/<ab>/<cd>/<hex>, named by content hash like the server's keys (which add an owner prefix). */
 function blobFile(hex: string): File {
   const dir = new Directory(blobsRoot(), hex.slice(0, 2), hex.slice(2, 4));
   if (!dir.exists) dir.create({ intermediates: true });

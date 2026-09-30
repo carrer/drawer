@@ -1,6 +1,7 @@
 import {
   EnrollRequestSchema,
   GoogleSignInRequestSchema,
+  type AuthConfigResponse,
   type EnrollResponseSchema,
   type NonceResponse,
   type WhoAmIResponse,
@@ -33,7 +34,16 @@ async function createDevice(tx: pg.PoolClient, ownerId: string, name: string): P
  * an operator-minted enrollment code (`make enroll-code EMAIL=…`) is the
  * fallback that needs no Google at all.
  */
-export function enrollRoutes(app: FastifyInstance, pool: pg.Pool, google: GoogleVerifier | null) {
+export function enrollRoutes(
+  app: FastifyInstance,
+  pool: pg.Pool,
+  google: GoogleVerifier | null,
+  googleClientId: string | null,
+) {
+  app.get('/auth/config', async (): Promise<AuthConfigResponse> => ({
+    googleWebClientId: google ? googleClientId : null,
+  }));
+
   app.post('/auth/enroll', async (req, reply) => {
     const body = EnrollRequestSchema.parse(req.body);
     const codeHash = hashSecret(normalizeEnrollCode(body.code));
@@ -99,6 +109,13 @@ export function enrollRoutes(app: FastifyInstance, pool: pg.Pool, google: Google
 }
 
 /** Authenticated: lets the app confirm its stored token still works, and whose it is. */
-export function whoamiRoutes(app: FastifyInstance) {
+export function whoamiRoutes(app: FastifyInstance, pool: pg.Pool) {
   app.get('/auth/whoami', async (req): Promise<WhoAmIResponse> => req.auth);
+
+  /** Sign out: this device's token stops working now, not whenever someone runs `make revoke`. */
+  app.post('/auth/signout', async (req, reply) => {
+    await pool.query('UPDATE devices SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL', [req.auth.deviceId]);
+    req.log.info({ deviceId: req.auth.deviceId }, 'device signed out');
+    return reply.code(204).send();
+  });
 }

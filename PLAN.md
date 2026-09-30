@@ -260,10 +260,12 @@ Deletes are soft (`deleted_at`) so they propagate. A nightly job hard-deletes ro
 ### API surface
 
 ```
+GET    /v1/auth/config          public: {googleWebClientId | null} — the app learns it from the box
 POST   /v1/auth/nonce           single-use nonce for Google sign-in (5 min)
 POST   /v1/auth/google          {idToken, deviceName} → device token   (invited accounts only)
 POST   /v1/auth/enroll          operator code → device token           (fallback, no Google)
 GET    /v1/auth/whoami          which device and account this token is
+POST   /v1/auth/signout         revoke this device's token
 GET    /v1/sync                 delta pull since rev
 POST   /v1/blobs/presign        {sha256, size, mime} → {blobId, uploadUrl} | {blobId, exists:true}
 POST   /v1/blobs/:id/commit     confirm upload; enqueues enrichment
@@ -392,9 +394,15 @@ else starts until this is true.
 ### Phase 3 — Capture + sync (~3–4 days)
 - [x] Accounts, server side: invites, Google sign-in (nonce + ID token → device token),
       per-owner categories and blobs, `make invite` / `users` / `disable` / `enable` (§5).
-- [ ] Sign-in screen (native Google sign-in with the nonce; a new native module, so a dev-client
-      rebuild), an account screen, and sign-out (warn about unsynced items, then wipe local data).
-      One account per install. Needs the Google Cloud OAuth clients (Web + Android, per signing key).
+- [x] Account screen (person icon on Home): drawer address + "Sign in with Google", or an
+      enrollment code; signed in, it shows the account and signs out — revoking the device token,
+      warning about unsynced changes, then wiping local data and files. One account per install.
+      Google via `react-native-nitro-google-signin` (MIT; Android Credential Manager, passes our
+      nonce verbatim — the popular `@react-native-google-signin` only has nonce support in its paid
+      tier). New native module: **rebuild the dev client**. Built and bundling; not yet run on a device.
+      Google Cloud setup, once: an OAuth consent screen (scopes `openid email profile`, testing mode
+      with your users listed is fine), a **Web** client (its ID → `GOOGLE_CLIENT_ID`), and an
+      **Android** client for `app.drowa` per signing key's SHA-1 (dev build and EAS).
 - [ ] Full capture pipeline from §4, including streamed hashing and kind sniffing.
 - [ ] Capture bottom sheet with one-tap Inbox save.
 - [ ] Upload queue: exponential backoff, resumable, survives app kill (`expo-background-task`).

@@ -17,6 +17,20 @@ import type { SqlDb } from './sql.ts';
  * Append-only, like the server's: never edit an entry that has shipped, add the
  * next one. Applied in order and tracked by `PRAGMA user_version`.
  */
+/**
+ * The four categories every account starts with. The server seeds these same
+ * rows with these same ids (services/api/src/users.ts), so they are already
+ * 'synced': the first pull reconciles them instead of duplicating. Shared by the
+ * first migration and `wipeLocalData`, so a wiped phone looks like a fresh one.
+ */
+export const DEFAULT_CATEGORIES_SQL = `
+  INSERT INTO categories (id, name, icon, sort_order, created_at, updated_at, rev, sync_state) VALUES
+    ('${INBOX_CATEGORY_ID}',                    'Inbox',      '📥', 0, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', 0, 'synced'),
+    ('00000000-0000-0000-0000-0000000000a2', 'Memes',      '😂', 1, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', 0, 'synced'),
+    ('00000000-0000-0000-0000-0000000000a3', 'Read later', '📖', 2, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', 0, 'synced'),
+    ('00000000-0000-0000-0000-0000000000a4', 'Reference',  '📎', 3, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', 0, 'synced');
+`;
+
 const MIGRATIONS: string[] = [
   `
   CREATE TABLE categories (
@@ -80,11 +94,7 @@ const MIGRATIONS: string[] = [
 
   -- The server seeds these same four rows with these same ids, so they are
   -- already 'synced': the first pull reconciles them instead of duplicating.
-  INSERT INTO categories (id, name, icon, sort_order, created_at, updated_at, rev, sync_state) VALUES
-    ('${INBOX_CATEGORY_ID}',                    'Inbox',      '📥', 0, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', 0, 'synced'),
-    ('00000000-0000-0000-0000-0000000000a2', 'Memes',      '😂', 1, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', 0, 'synced'),
-    ('00000000-0000-0000-0000-0000000000a3', 'Read later', '📖', 2, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', 0, 'synced'),
-    ('00000000-0000-0000-0000-0000000000a4', 'Reference',  '📎', 3, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', 0, 'synced');
+  ${DEFAULT_CATEGORIES_SQL}
   `,
 ];
 

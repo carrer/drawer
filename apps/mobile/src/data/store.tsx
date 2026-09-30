@@ -74,6 +74,11 @@ function useLiveQuery<T>(read: (db: SqlDb) => T, deps: unknown[]): T {
   return useMemo(() => read(store.db), [store, version, ...deps]);
 }
 
+/** The raw handle, for one-off reads at the moment of an action (not for rendering — use a hook). */
+export function useStoreDb(): SqlDb {
+  return useStore().db;
+}
+
 /** `write(db => updateItem(db, …))` — every mutation goes through here so readers refresh. */
 export function useWrite(): Store['write'] {
   return useStore().write;

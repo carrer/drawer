@@ -12,6 +12,7 @@ const app = buildApp({
   s3,
   shareBaseUrl: config.SHARE_BASE_URL,
   google: config.GOOGLE_CLIENT_ID ? createGoogleVerifier(config.GOOGLE_CLIENT_ID) : null,
+  googleClientId: config.GOOGLE_CLIENT_ID ?? null,
   logger: { level: process.env.LOG_LEVEL ?? 'info' },
 });
 

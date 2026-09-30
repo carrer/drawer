@@ -18,8 +18,9 @@ categories, sync and search are done and integration-tested; the production stac
 Tailscale TLS, `infra/docker-compose.prod.yml`) is written but not yet run against a real tailnet. `services/worker/` in the target
 architecture does not exist yet. **Phase 2 (mobile local-first core) is built** — SQLite, gallery,
 categories, detail views — and bundles, but has not had an on-device pass yet. **Phase 3:** accounts
-are done server-side (invites, Google sign-in, per-owner isolation); the app has no sign-in screen
-or sync yet.
+are done server-side (invites, Google sign-in, per-owner isolation) and the app has an account screen
+(`app/account.tsx`, Google via `react-native-nitro-google-signin`, which needs a dev-client rebuild);
+sync itself isn't built yet. `EXPO_PUBLIC_DRAWER_URL` pre-fills the drawer address on that screen.
 
 **Deployment is Tailscale-only (decided 2026-09-28):** no public ports; the phone reaches the box over
 the tailnet via its MagicDNS name. Don't design for public-internet exposure (see PLAN.md §10).

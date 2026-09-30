@@ -1,4 +1,5 @@
 import { INBOX_CATEGORY_ID, uuidv7, type ItemKind, type ItemPatch } from '@drawer/shared';
+import { DEFAULT_CATEGORIES_SQL } from './migrations.ts';
 import type { SqlDb, SqlValue } from './sql.ts';
 
 /**
@@ -492,5 +493,31 @@ export function moveCategory(db: SqlDb, id: string, direction: -1 | 1): void {
         [order, ts, cid, order],
       );
     });
+  });
+}
+
+/**
+ * Items whose latest local state the server hasn't confirmed — what signing
+ * out would lose. Deleted rows count too: an unsynced delete is a change.
+ */
+export function countUnsynced(db: SqlDb): number {
+  const row = db.get<{ n: number }>(
+    `SELECT (SELECT count(*) FROM items WHERE sync_state <> 'synced')
+          + (SELECT count(*) FROM categories WHERE sync_state <> 'synced') AS n`,
+  );
+  return row?.n ?? 0;
+}
+
+/**
+ * Forget everything this install holds for the signed-in account: items,
+ * memberships and categories, back to the four defaults a fresh install has.
+ * The caller deletes the files on disk (they're outside the database).
+ */
+export function wipeLocalData(db: SqlDb): void {
+  db.tx(() => {
+    db.run('DELETE FROM item_categories');
+    db.run('DELETE FROM items');
+    db.run('DELETE FROM categories');
+    db.exec(DEFAULT_CATEGORIES_SQL);
   });
 }

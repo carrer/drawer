@@ -132,3 +132,16 @@ test('inviting: emails are normalized and unique, and the first account can be c
   assert.equal(first.id, '00000000-0000-0000-0000-000000000001');
   await assert.rejects(inviteUser(h.pool, 'second@example.com', { claimFirst: true }), /already has an email/);
 });
+
+test('the app learns the Web client ID from the box, before signing in', async () => {
+  const res = await h.app.inject({ url: '/v1/auth/config' });
+  assert.deepEqual(res.json(), { googleWebClientId: 'drawer-test.apps.googleusercontent.com' });
+});
+
+test('signing out revokes only this device', async () => {
+  const u = await h.user();
+  const [one, two] = [await u.device('one'), await u.device('two')];
+  assert.equal((await one.request('POST', '/v1/auth/signout')).statusCode, 204);
+  assert.equal((await one.request('GET', '/v1/auth/whoami')).statusCode, 401);
+  assert.equal((await two.request('GET', '/v1/auth/whoami')).statusCode, 200);
+});

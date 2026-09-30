@@ -42,7 +42,14 @@ export async function setup() {
   const jwks = createLocalJWKSet({ keys: [{ ...(await exportJWK(publicKey)), kid: 'test', alg: 'RS256' }] });
   const google = createGoogleVerifier(GOOGLE_CLIENT_ID, jwks);
 
-  const app = buildApp({ pool, s3, shareBaseUrl: config.SHARE_BASE_URL, google, logger: false });
+  const app = buildApp({
+    pool,
+    s3,
+    shareBaseUrl: config.SHARE_BASE_URL,
+    google,
+    googleClientId: GOOGLE_CLIENT_ID,
+    logger: false,
+  });
 
   /** A Google ID token as Google would sign it; override any claim (or the lifetime) to test rejections. */
   async function googleToken(claims: JWTPayload & { email?: string; nonce?: string }, expiresIn = '1h') {
