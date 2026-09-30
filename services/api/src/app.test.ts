@@ -61,3 +61,9 @@ test('minting a share link needs a device token', async () => {
   const res = await app.inject({ method: 'POST', url: '/v1/items/01926f3e-7a2b-7c00-8000-000000000000/share' });
   assert.equal(res.statusCode, 401);
 });
+
+test('Google sign-in answers 503, without touching the db, when GOOGLE_CLIENT_ID is unset', async () => {
+  const bad = await app.inject({ method: 'POST', url: '/v1/auth/google', payload: {} });
+  assert.equal(bad.statusCode, 503);
+  assert.equal(bad.json().error, 'not_configured');
+});

@@ -42,6 +42,8 @@ services:
       # QR share links (/s/<token>) — the same Caddy site as the API. Reachable
       # only from the tailnet until /s/* is deliberately exposed (PLAN.md §10).
       SHARE_BASE_URL: https://${DRAWER_HOST:?set DRAWER_HOST in infra/.env}
+      # Optional: unset leaves Google sign-in off (enrollment codes still work).
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 10s

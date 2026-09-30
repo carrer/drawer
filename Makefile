@@ -21,7 +21,7 @@ ANDROID_HOME ?= $(HOME)/Android/Sdk
 JAVA_HOME ?= $(firstword $(wildcard /usr/lib/jvm/java-17-openjdk-* /usr/lib/jvm/temurin-17-*))
 ANDROID_ENV := ANDROID_HOME=$(ANDROID_HOME) JAVA_HOME=$(JAVA_HOME) PATH=$(JAVA_HOME)/bin:$(ANDROID_HOME)/platform-tools:$$PATH
 
-.PHONY: help install up down logs ps reset db migrate enroll-code devices revoke api mobile prebuild android typecheck test test-integration check lan-ip
+.PHONY: help install up down logs ps reset db migrate invite users disable enable enroll-code devices revoke api mobile prebuild android typecheck test test-integration check lan-ip
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -57,11 +57,23 @@ db: ## psql shell
 migrate: ## Apply pending migrations (infra/db/migrations)
 	@$(MIGRATE)
 
-enroll-code: ## Mint a one-shot code to enroll a device (TTL=minutes, default 15)
-	@$(CLI) enroll-code --ttl $(or $(TTL),15)
+invite: ## Let an email sign in with Google: make invite EMAIL=<email> [CLAIM=1: give it the existing account]
+	@$(CLI) invite $(EMAIL) $(if $(CLAIM),--claim)
 
-devices: ## List enrolled devices
-	@$(CLI) devices
+users: ## List accounts
+	@$(CLI) users
+
+disable: ## Lock an account out, all its devices: make disable EMAIL=<email>
+	@$(CLI) disable $(EMAIL)
+
+enable: ## Undo disable: make enable EMAIL=<email>
+	@$(CLI) enable $(EMAIL)
+
+enroll-code: ## Mint a one-shot code to enroll a device without Google (EMAIL=account, TTL=minutes)
+	@$(CLI) enroll-code --ttl $(or $(TTL),15) $(if $(EMAIL),--user $(EMAIL))
+
+devices: ## List enrolled devices (EMAIL= to filter)
+	@$(CLI) devices $(if $(EMAIL),--user $(EMAIL))
 
 revoke: ## Revoke a device token: make revoke ID=<device-id>
 	@$(CLI) revoke $(ID)

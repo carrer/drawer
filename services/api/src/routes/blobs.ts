@@ -15,31 +15,33 @@ const UPLOAD_URL_TTL_S = 60 * 60;
 const IdParams = z.object({ id: Uuid });
 
 /**
- * Blobs are content-addressed and global, not owner-scoped: one row per distinct
- * sha256 ever. With a single user that's pure dedupe. If multi-user ever lands,
- * `exists: true` would confirm to one user that another holds a file — scope the
- * dedupe answer to blobs the caller already references before then.
+ * Blobs are content-addressed per owner: one row per (owner, sha256). Dedupe
+ * never crosses accounts — `exists: true` for someone else's file would confirm
+ * they hold it, and would let you reference bytes you never had
+ * (005_multi_user.sql).
  */
 export function blobRoutes(app: FastifyInstance, pool: pg.Pool, s3: Storage) {
   app.post('/blobs/presign', async (req): Promise<PresignResponse> => {
     const body = PresignRequestSchema.parse(req.body);
+    const ownerId = req.auth.ownerId;
+    const key = storageKey(ownerId, body.sha256);
 
     // One statement, so two devices presigning the same bytes converge on one
     // row. An uncommitted row takes the latest declared size/type — an earlier
     // attempt may have been wrong, and nothing has been verified yet.
     const { rows } = await pool.query<{ id: string; uploaded: boolean }>(
-      `INSERT INTO blobs (sha256, byte_size, mime_type, storage_key)
-       VALUES (decode($1, 'hex'), $2, $3, $4)
-       ON CONFLICT (sha256) DO UPDATE SET
+      `INSERT INTO blobs (owner_id, sha256, byte_size, mime_type, storage_key)
+       VALUES ($5, decode($1, 'hex'), $2, $3, $4)
+       ON CONFLICT (owner_id, sha256) DO UPDATE SET
          byte_size = CASE WHEN blobs.uploaded_at IS NULL THEN EXCLUDED.byte_size ELSE blobs.byte_size END,
          mime_type = CASE WHEN blobs.uploaded_at IS NULL THEN EXCLUDED.mime_type ELSE blobs.mime_type END
        RETURNING id, uploaded_at IS NOT NULL AS uploaded`,
-      [body.sha256, body.byteSize, body.mimeType, storageKey(body.sha256)],
+      [body.sha256, body.byteSize, body.mimeType, key, ownerId],
     );
     const blob = rows[0]!;
     if (blob.uploaded) return { exists: true, blobId: blob.id };
 
-    const uploadUrl = await presignPut(s3, storageKey(body.sha256), body.sha256, body.byteSize, UPLOAD_URL_TTL_S);
+    const uploadUrl = await presignPut(s3, key, body.sha256, body.byteSize, UPLOAD_URL_TTL_S);
     return {
       exists: false,
       blobId: blob.id,
@@ -50,7 +52,10 @@ export function blobRoutes(app: FastifyInstance, pool: pg.Pool, s3: Storage) {
 
   app.post('/blobs/:id/commit', async (req): Promise<CommitResponse> => {
     const { id } = IdParams.parse(req.params);
-    const { rows } = await pool.query<BlobRow>(`SELECT ${blobColumns('b')} FROM blobs b WHERE b.id = $1`, [id]);
+    const { rows } = await pool.query<BlobRow>(
+      `SELECT ${blobColumns('b')} FROM blobs b WHERE b.id = $1 AND b.owner_id = $2`,
+      [id, req.auth.ownerId],
+    );
     const blob = rows[0];
     if (!blob) throw new HttpError(404, 'not_found', 'no such blob');
     if (blob.uploaded_at) return toBlob(blob);

@@ -38,10 +38,12 @@ export function syncRoutes(app: FastifyInstance, pool: pg.Pool) {
       const taken = page.slice(0, limit);
       const ids = (t: string) => taken.filter((r) => r.t === t).map((r) => r.id);
 
-      const items = await loadItems(tx, 'i.id = ANY($1::uuid[])', [ids('item')], 'ORDER BY i.rev');
+      // Owner filters on both: category ids are only unique per owner — every
+      // account has an Inbox with the same id.
+      const items = await loadItems(tx, 'i.owner_id = $1 AND i.id = ANY($2::uuid[])', [ownerId, ids('item')], 'ORDER BY i.rev');
       const { rows: cats } = await tx.query<CategoryRow>(
-        `SELECT ${CATEGORY_COLUMNS} FROM categories WHERE id = ANY($1::uuid[]) ORDER BY rev`,
-        [ids('category')],
+        `SELECT ${CATEGORY_COLUMNS} FROM categories WHERE owner_id = $1 AND id = ANY($2::uuid[]) ORDER BY rev`,
+        [ownerId, ids('category')],
       );
       return {
         items,

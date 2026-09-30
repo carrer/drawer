@@ -1,7 +1,7 @@
 import type pg from 'pg';
 
-/** The single owner every row belongs to until multi-user exists (seeded by 001_init.sql). */
-export const OWNER_ID = '00000000-0000-0000-0000-000000000001';
+/** The account that existed before multi-user (seeded by 001_init.sql); `make invite CLAIM=1` gives it an email. */
+export const FIRST_OWNER_ID = '00000000-0000-0000-0000-000000000001';
 
 /** Advisory lock that makes rev order equal commit order — see 003_rev_commit_order.sql. */
 export const DRAWER_REV_LOCK = 7239011;

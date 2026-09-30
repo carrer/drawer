@@ -5,9 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Drawer — a personal, self-hosted capture archive. You share anything from your phone (image,
-video, PDF, link, plain text) via the OS share sheet; it lands in a gallery you own. Single-user
-by design (see PLAN.md §1); multi-user is deferred but every row is already owner-scoped so it's
-additive later.
+video, PDF, link, plain text) via the OS share sheet; it lands in a gallery you own. A handful of
+invited accounts share one self-hosted box, signing in with Google (PLAN.md §5); accounts never
+share rows.
 
 See **PLAN.md** for the full architecture and phase-by-phase roadmap — it's the source of truth
 for design decisions and known traps, not just a proposal.
@@ -17,7 +17,9 @@ Expo account. **Phase 1 (backend core) in progress:** migrations, enrollment/aut
 categories, sync and search are done and integration-tested; the production stack (Caddy +
 Tailscale TLS, `infra/docker-compose.prod.yml`) is written but not yet run against a real tailnet. `services/worker/` in the target
 architecture does not exist yet. **Phase 2 (mobile local-first core) is built** — SQLite, gallery,
-categories, detail views — and bundles, but has not had an on-device pass yet.
+categories, detail views — and bundles, but has not had an on-device pass yet. **Phase 3:** accounts
+are done server-side (invites, Google sign-in, per-owner isolation); the app has no sign-in screen
+or sync yet.
 
 **Deployment is Tailscale-only (decided 2026-09-28):** no public ports; the phone reaches the box over
 the tailnet via its MagicDNS name. Don't design for public-internet exposure (see PLAN.md §10).
@@ -36,8 +38,10 @@ make test                                    # unit tests, no database needed
 make test-integration                        # API against the running stack (make up first)
 make db                                      # psql shell
 make migrate                                 # apply pending migrations (make up does this too)
-make enroll-code [TTL=15]                    # mint a one-shot code to enroll a phone
-make devices / make revoke ID=<uuid>         # list / revoke enrolled devices
+make invite EMAIL=<email> [CLAIM=1]          # let an email sign in with Google (CLAIM=1: give it the pre-multi-user account)
+make users / make disable EMAIL= / make enable EMAIL=   # list accounts / lock one out, reversibly
+make enroll-code [EMAIL=…] [TTL=15]          # one-shot code to enroll a phone without Google
+make devices [EMAIL=…] / make revoke ID=<uuid>   # list / revoke enrolled devices
 make down / make reset                       # stop services / DESTROY local data + re-apply migrations (asks first)
 make lan-ip                                  # print the LAN IP to put in S3_PUBLIC_ENDPOINT
 make up PROD=1                               # production: + API image, Caddy, tailscale sidecar; no host ports
@@ -165,8 +169,15 @@ it actually dialled — signing with the internal name is the #1 self-hosted S3 
 - Deletes are soft (`deleted_at`) so they propagate through sync; a nightly job is planned to
   hard-delete rows >30 days soft-deleted and GC blobs with no remaining referents (must be
   reference-counted, not age-based — dedupe means one blob can back many items).
+- Accounts (`005_multi_user.sql`, PLAN.md §5): invite-only, Google sign-in binds an invited email to
+  `users.google_sub`. **Category ids are unique per owner, not globally** — every account has the
+  same `INBOX_CATEGORY_ID` — so any query that selects categories by id must also filter on
+  `owner_id`. Blobs are per owner too (no cross-account dedupe; knowing a hash must never grant
+  bytes). Composite `(id, owner_id)` foreign keys make cross-account references impossible;
+  `test/integration/isolation.test.ts` proves it. Tests sign their own Google ID tokens against a
+  local JWKS (`harness.ts` `googleToken`), so nothing needs a real Google project.
 - Share-as-QR (PLAN.md §5): `POST /v1/items/:id/share` mints a 30 s single-use token and
-  `GET /s/:token` (`services/api/src/routes/share.ts`, the one unauthenticated route besides enroll)
+  `GET /s/:token` (`services/api/src/routes/share.ts`, the one unauthenticated route besides sign-in)
   redeems it with a 302 to a presigned GET. Share links are built on `SHARE_BASE_URL`, which in
   prod is derived from `DRAWER_HOST` like `S3_PUBLIC_ENDPOINT`. Keep `/s/*` written as if it faced the
   public internet: every failure is the same 410, and `exposeHeadRoute: false` stops a link

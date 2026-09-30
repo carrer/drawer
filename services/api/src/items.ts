@@ -34,10 +34,11 @@ function checkShape(u: ItemUpsert) {
   if (u.kind === 'text' && u.body == null) throw new HttpError(400, 'bad_request', 'a text item needs body');
 }
 
-async function resolveBlob(tx: pg.PoolClient, sha256: string): Promise<string> {
+/** The caller's own blob with this hash. Another account's copy of the same bytes doesn't count. */
+async function resolveBlob(tx: pg.PoolClient, ownerId: string, sha256: string): Promise<string> {
   const { rows } = await tx.query<{ id: string; uploaded: boolean }>(
-    `SELECT id, uploaded_at IS NOT NULL AS uploaded FROM blobs WHERE sha256 = decode($1, 'hex')`,
-    [sha256],
+    `SELECT id, uploaded_at IS NOT NULL AS uploaded FROM blobs WHERE owner_id = $1 AND sha256 = decode($2, 'hex')`,
+    [ownerId, sha256],
   );
   const blob = rows[0];
   if (!blob) throw new HttpError(409, 'blob_missing', 'no blob with that sha256 — presign and upload it first');
@@ -68,9 +69,9 @@ async function setCategories(tx: pg.PoolClient, ownerId: string, itemId: string,
     wanted,
   ]);
   await tx.query(
-    `INSERT INTO item_categories (item_id, category_id)
-     SELECT $1, unnest($2::uuid[]) ON CONFLICT DO NOTHING`,
-    [itemId, wanted],
+    `INSERT INTO item_categories (owner_id, item_id, category_id)
+     SELECT $3, $1, unnest($2::uuid[]) ON CONFLICT DO NOTHING`,
+    [itemId, wanted, ownerId],
   );
   return true;
 }
@@ -95,7 +96,7 @@ export async function upsertItem(
 ): Promise<{ item: Item; created: boolean }> {
   checkShape(u);
   return withWriteTx(pool, async (tx) => {
-    const blobId = u.blobSha256 ? await resolveBlob(tx, u.blobSha256) : null;
+    const blobId = u.blobSha256 ? await resolveBlob(tx, ownerId, u.blobSha256) : null;
     const editable = [u.title ?? null, u.note ?? null, u.body ?? null, u.sourceApp ?? null, u.tags];
 
     const inserted = await tx.query(

@@ -48,16 +48,15 @@ export function categoryRoutes(app: FastifyInstance, pool: pg.Pool) {
       const res = await tx.query<{ inserted: boolean }>(
         `INSERT INTO categories (id, owner_id, name, color, icon, sort_order)
          VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (id) DO UPDATE SET
+         ON CONFLICT (owner_id, id) DO UPDATE SET
            name = EXCLUDED.name, color = EXCLUDED.color, icon = EXCLUDED.icon, sort_order = EXCLUDED.sort_order
-         WHERE categories.owner_id = EXCLUDED.owner_id
-           AND categories.deleted_at IS NULL
+         WHERE categories.deleted_at IS NULL
            AND (categories.name, categories.color, categories.icon, categories.sort_order)
                IS DISTINCT FROM (EXCLUDED.name, EXCLUDED.color, EXCLUDED.icon, EXCLUDED.sort_order)
          RETURNING xmax = 0 AS inserted`,
         [c.id, ownerId, ...fields],
       ).catch((err) => { throw nameTaken(err); });
-      // No row back means unchanged, deleted, or someone else's id; the read sorts it out.
+      // No row back means unchanged or deleted; the read sorts it out.
       const category = await getCategory(tx, ownerId, c.id);
       if (!category) throw new HttpError(404, 'not_found', 'no such category');
       return { category, created: !!res.rows[0]?.inserted };
@@ -112,11 +111,11 @@ export function categoryRoutes(app: FastifyInstance, pool: pg.Pool) {
       );
       if (!rows[0]) throw new HttpError(404, 'not_found', 'no such category');
       if (rows[0].deleted) return;
-      await tx.query('UPDATE categories SET deleted_at = now() WHERE id = $1', [id]);
+      await tx.query('UPDATE categories SET deleted_at = now() WHERE id = $1 AND owner_id = $2', [id, ownerId]);
       await tx.query(
-        `WITH gone AS (DELETE FROM item_categories WHERE category_id = $1 RETURNING item_id)
+        `WITH gone AS (DELETE FROM item_categories WHERE owner_id = $2 AND category_id = $1 RETURNING item_id)
          UPDATE items SET updated_at = now() WHERE id IN (SELECT item_id FROM gone)`,
-        [id],
+        [id, ownerId],
       );
     });
     return reply.code(204).send();

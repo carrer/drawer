@@ -5,7 +5,8 @@ artifact (image, meme, link, PDF, screenshot, snippet of text) lands in a galler
 filed under categories you define.
 
 **Stack decisions (locked):** Expo / React Native · self-hosted Docker (Fastify + Postgres +
-Garage S3) · single user · deterministic metadata enrichment, no AI in v1.
+Garage S3) · a few invited accounts on one box you run, signed in with Google (§5, since
+2026-09-30; single-user before) · deterministic metadata enrichment, no AI in v1.
 
 ---
 
@@ -225,7 +226,7 @@ under a hard memory cap (~120 MB) — copy the file handle, never decode or proc
 
 ## 5. Sync protocol
 
-Single user, usually one device. No CRDTs, no vector clocks. **Last-write-wins on `updated_at`,
+Per account, usually one device. Accounts never share rows, so sync is per owner. No CRDTs, no vector clocks. **Last-write-wins on `updated_at`,
 with a server-assigned revision cursor.**
 
 ```
@@ -259,7 +260,10 @@ Deletes are soft (`deleted_at`) so they propagate. A nightly job hard-deletes ro
 ### API surface
 
 ```
-POST   /v1/auth/enroll          bootstrap code → opaque device token   (once per device)
+POST   /v1/auth/nonce           single-use nonce for Google sign-in (5 min)
+POST   /v1/auth/google          {idToken, deviceName} → device token   (invited accounts only)
+POST   /v1/auth/enroll          operator code → device token           (fallback, no Google)
+GET    /v1/auth/whoami          which device and account this token is
 GET    /v1/sync                 delta pull since rev
 POST   /v1/blobs/presign        {sha256, size, mime} → {blobId, uploadUrl} | {blobId, exists:true}
 POST   /v1/blobs/:id/commit     confirm upload; enqueues enrichment
@@ -275,6 +279,28 @@ CRUD   /v1/categories
 
 `presign` returning `exists: true` is the dedupe path: re-share the same meme and the save is
 instant and free.
+
+**Accounts** (decided 2026-09-30, `005_multi_user.sql`). Invite-only: `make invite EMAIL=…`
+creates the account with its default categories, and the first Google sign-in with that
+*verified* address binds it (`users.google_sub`, the stable identity — emails change). No invite,
+no account. `make invite EMAIL=… CLAIM=1` gives the pre-multi-user account (`…0001`) and its data
+to an address. Sign-in: the app gets a nonce, passes it to Google, and trades the ID token for a
+device token; the server verifies it offline against Google's published keys (issuer, audience =
+`GOOGLE_CLIENT_ID`, the Web client ID, expiry) and consumes the nonce in the same transaction, so a
+captured ID token can't be replayed. Only outbound HTTPS is needed, so tailnet-only still holds —
+but every account's phone must be on the tailnet (share the node with them). `make disable
+EMAIL=…` fails all of an account's device tokens at once, reversibly.
+
+Isolation is enforced by the schema, not just the queries:
+- Category ids are unique **per owner** (primary key `(owner_id, id)`), so every account has the
+  well-known `INBOX_CATEGORY_ID` and the app's local seed still reconciles on first sync.
+- Blobs are per owner (`UNIQUE (owner_id, sha256)`, keys `blobs/<owner>/…`), and items reference
+  blobs through a composite `(blob_id, owner_id)` key. No cross-account dedupe: it would confirm
+  that someone else holds a file, and knowing a hash would be enough to attach their bytes.
+  Pre-005 blobs keep their old `blobs/<ab>/…` keys; the key is stored per row.
+- Memberships and share tokens carry the owner and reference items by `(id, owner_id)`.
+
+Item ids stay globally unique (client uuidv7); an upsert over another account's id is a 404.
 
 **Share as QR** (item action sheet → QR, decided 2026-09-29). Links and short notes (≤ 800
 UTF-8 bytes) are encoded straight into the code, offline. Files need their original synced: the
@@ -364,6 +390,11 @@ else starts until this is true.
 - [x] Runs entirely offline; "Load sample data" (dev builds only) seeds every kind.
 
 ### Phase 3 — Capture + sync (~3–4 days)
+- [x] Accounts, server side: invites, Google sign-in (nonce + ID token → device token),
+      per-owner categories and blobs, `make invite` / `users` / `disable` / `enable` (§5).
+- [ ] Sign-in screen (native Google sign-in with the nonce; a new native module, so a dev-client
+      rebuild), an account screen, and sign-out (warn about unsynced items, then wipe local data).
+      One account per install. Needs the Google Cloud OAuth clients (Web + Android, per signing key).
 - [ ] Full capture pipeline from §4, including streamed hashing and kind sniffing.
 - [ ] Capture bottom sheet with one-tap Inbox save.
 - [ ] Upload queue: exponential backoff, resumable, survives app kill (`expo-background-task`).
@@ -435,8 +466,9 @@ iOS share extension · a read-only web gallery reusing the same API · AI auto-t
 ## 9. Explicitly out of scope for v1
 
 Tags UI (the column exists, expose it later) · video transcoding · web app · full-text
-highlighting · multi-user · AI anything · end-to-end encryption (the box is yours; disk
-encryption at the VPS level is the proportionate answer).
+highlighting · self-signup and accounts for people outside your tailnet · AI anything ·
+encrypting stored files (deferred 2026-09-30 — with other people's files on the box, the likely
+answer is per-account data keys wrapped by a server master key, plus disk encryption).
 
 ---
 

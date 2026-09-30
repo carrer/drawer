@@ -15,6 +15,13 @@ const ConfigSchema = z.object({
     .string()
     .url()
     .transform((u) => u.replace(/\/+$/, '')),
+  // The OAuth *Web* client ID that Google ID tokens are issued for (the app's
+  // `serverClientId`). Unset: Google sign-in answers 503 and only operator
+  // enrollment codes work. Empty counts as unset (compose passes "" for it).
+  GOOGLE_CLIENT_ID: z
+    .string()
+    .optional()
+    .transform((v) => v?.trim() || undefined),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

@@ -91,6 +91,31 @@ export const EnrollResponseSchema = z.object({
   ownerId: Uuid,
 });
 
+/**
+ * Google sign-in. The app first asks for a single-use nonce, passes it to
+ * Google's sign-in, and sends back the ID token Google signed it into; the
+ * server answers exactly like enrollment, with a device token.
+ */
+export const NonceResponseSchema = z.object({
+  nonce: z.string().min(16),
+  expiresAt: z.string().datetime({ offset: true }),
+});
+export type NonceResponse = z.infer<typeof NonceResponseSchema>;
+
+export const GoogleSignInRequestSchema = z.object({
+  idToken: z.string().min(1).max(8192),
+  deviceName: z.string().min(1).max(128),
+});
+export type GoogleSignInRequest = z.infer<typeof GoogleSignInRequestSchema>;
+
+export const WhoAmIResponseSchema = z.object({
+  deviceId: Uuid,
+  ownerId: Uuid,
+  deviceName: z.string(),
+  email: z.string().nullable(),
+});
+export type WhoAmIResponse = z.infer<typeof WhoAmIResponseSchema>;
+
 export const ErrorResponseSchema = z.object({
   error: z.string(),
   message: z.string(),

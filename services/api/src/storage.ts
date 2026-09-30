@@ -40,9 +40,14 @@ export function createS3(config: Config) {
 
 export type Storage = ReturnType<typeof createS3>;
 
-/** blobs/<ab>/<cd>/<full hex> — two levels of fan-out keeps any prefix listing sane. */
-export function storageKey(sha256Hex: string): string {
-  return `blobs/${sha256Hex.slice(0, 2)}/${sha256Hex.slice(2, 4)}/${sha256Hex}`;
+/**
+ * blobs/<owner>/<ab>/<cd>/<full hex>. Per owner, so one user's files are one
+ * prefix (export, delete, a future per-user key); two levels of fan-out keep
+ * any listing under it sane. Blobs from before multi-user keep their old
+ * `blobs/<ab>/<cd>/<hex>` key — it's stored per row, so both layouts work.
+ */
+export function storageKey(ownerId: string, sha256Hex: string): string {
+  return `blobs/${ownerId}/${sha256Hex.slice(0, 2)}/${sha256Hex.slice(2, 4)}/${sha256Hex}`;
 }
 
 /**

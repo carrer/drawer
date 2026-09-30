@@ -3,6 +3,7 @@ import Fastify, { type FastifyServerOptions } from 'fastify';
 import type pg from 'pg';
 import { requireDevice } from './auth.ts';
 import { errorHandler } from './errors.ts';
+import type { GoogleVerifier } from './google.ts';
 import { enrollRoutes, whoamiRoutes } from './routes/auth.ts';
 import { blobRoutes } from './routes/blobs.ts';
 import { categoryRoutes } from './routes/categories.ts';
@@ -16,11 +17,13 @@ export interface AppDeps {
   s3: Storage;
   /** SHARE_BASE_URL: the origin QR share links point at. */
   shareBaseUrl: string;
+  /** Verifies Google ID tokens; null when GOOGLE_CLIENT_ID isn't configured. */
+  google?: GoogleVerifier | null;
   logger?: FastifyServerOptions['logger'];
 }
 
 /** Build the app without listening, so tests can drive it through `app.inject()`. */
-export function buildApp({ pool, s3, shareBaseUrl, logger = true }: AppDeps) {
+export function buildApp({ pool, s3, shareBaseUrl, google = null, logger = true }: AppDeps) {
   const app = Fastify({
     logger,
     bodyLimit: 2 * 1024 * 1024, // metadata only; bytes go straight to S3
@@ -69,7 +72,7 @@ export function buildApp({ pool, s3, shareBaseUrl, logger = true }: AppDeps) {
 
   app.register(
     async (v1) => {
-      enrollRoutes(v1, pool);
+      enrollRoutes(v1, pool, google);
 
       // Everything else under /v1 needs a device token. Encapsulated, so the
       // hook can't leak onto the public routes above.

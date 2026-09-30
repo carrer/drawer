@@ -53,3 +53,8 @@ export function generateShareToken(): string {
 export function isShareToken(s: string): boolean {
   return /^[A-Za-z0-9_-]{22}$/.test(s);
 }
+
+/** Single-use nonce for Google sign-in: 256 bits, base64url. Only its hash is stored. */
+export function generateNonce(): string {
+  return randomBytes(32).toString('base64url');
+}
